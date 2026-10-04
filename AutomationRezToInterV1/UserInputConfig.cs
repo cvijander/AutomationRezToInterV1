@@ -35,8 +35,7 @@ namespace AutomationRezToInterV1
         public static void InitialDataDisplay(UserInputConfig config)
         {
             Console.WriteLine("----------------------------");
-            Console.WriteLine($"Korisnik {config.Username}");
-            Console.WriteLine($"Password {config.Password}");
+            Console.WriteLine($"Korisnik: {(string.IsNullOrEmpty(config.Username) ? "(iz appsettings.json)" : config.Username)}");
             Console.WriteLine("----------------------------");
             Console.WriteLine();
             Console.WriteLine("Pritisni ENTER za dalje ...");
@@ -49,7 +48,7 @@ namespace AutomationRezToInterV1
 
             Console.WriteLine("=== BRZI START ===");
             Console.WriteLine();
-            Console.WriteLine("Pritisni [F1] za nalog Maloprodaje (0202)");
+            Console.WriteLine("Pritisni [F1] za brzu prijavu (nalog iz appsettings.json)");
             Console.WriteLine("Pritisni [F2] za drugi nalog (rucni unos podataka)");
             Console.WriteLine();
             Console.WriteLine("Pritisni [ESC] za izlaz iz programa");
@@ -62,8 +61,7 @@ namespace AutomationRezToInterV1
 
                 if (key == ConsoleKey.F1)
                 {
-                    config.Username = "maloprodaja";
-                    config.Password = "0202";
+                    
                     isValid = true;
                 }
                 else if (key == ConsoleKey.F2)

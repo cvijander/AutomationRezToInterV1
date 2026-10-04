@@ -6,13 +6,14 @@ using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA2;
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 using static AutomationRezToInterV1.UserInputConfig;
-using static System.Net.Mime.MediaTypeNames;
+using System.Text.Json;
+using System.Runtime.InteropServices;
 
 
 
@@ -23,15 +24,85 @@ namespace AutomationRezToInterV1
     public class AutomationHelpers
     {
         private const int UIRefreshDelay = 150;
-        public static FlaUI.Core.Application StartAnApplication(string path)
+        public static Application StartAnApplication(string path)
         {
-            FlaUI.Core.Application app = FlaUI.Core.Application.Launch(path);
-            if (app != null)
-            {
-                Console.WriteLine("Cekamo da se prozor pojavi");
-                Thread.Sleep(3000);
-            }
+            var app = Application.Launch(path);
+            Console.WriteLine("[INFO] Logik pokrenut, čekam glavni prozor...");
             return app;
+
+        }
+
+        public static Window CekajLogikProzor(FlaUI.Core.AutomationBase automation, int processId, int timeoutMs = 15000)
+        {
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                foreach (var el in automation.GetDesktop().FindAllChildren(cf => cf.ByControlType(ControlType.Window)))
+                {
+                    try
+                    {
+                        if (el.Properties.ProcessId.ValueOrDefault != processId) continue;
+                        if (!(el.Name ?? "").Contains("Logik")) continue;
+
+                        var w = el.AsWindow();
+                        if (NadjiDonjiLeviPanel(w.Properties.NativeWindowHandle.Value) != null)
+                        {
+                            RunControl.Sleep(300);
+                            return w;
+                        }
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException) { }
+                }
+                RunControl.Sleep(200);
+            }
+            Console.WriteLine($"[ERROR] Prozor pokrenutog Logika (proces {processId}) se nije pojavio za {timeoutMs / 1000}s.");
+            return null;
+        }
+
+        public static bool DupliKlikNaGridDokumenata(Window logikProzor)
+        {
+            IntPtr h = logikProzor.Properties.NativeWindowHandle.Value;
+            IntPtr forma = NadjiFormu(h, "TInvoiceViewerForm");
+            if (forma == IntPtr.Zero)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim modul Dokumenti (TInvoiceViewerForm).");
+                return false;
+            }
+            var grid = GetChildFields(forma).FirstOrDefault(p => p.Klasa == "TDBGrid");
+            if (grid == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim grid u modulu Dokumenti.");
+                return false;
+            }
+
+            var tacka = new System.Drawing.Point(grid.R.Left + 50, (grid.R.Top + grid.R.Bottom) / 2);
+            SetForegroundWindow(h);
+            RunControl.Sleep(150);
+
+            // ako je na vrhu drugi modul (npr. SEF), vraćamo se na Dokumenti jednom
+            string modul = ModulNaTacki(tacka);
+            if (modul != "TInvoiceViewerForm")
+            {
+                Console.WriteLine($"[WARNING] Na vrhu je '{modul}' umesto Dokumenata. Vraćam se na Dokumenti...");
+                KlikniDokumenti(logikProzor);
+                RunControl.Sleep(1000);
+                SetForegroundWindow(h);
+                RunControl.Sleep(150);
+                modul = ModulNaTacki(tacka);
+            }
+
+            IntPtr pogodak = WindowFromPoint(tacka);
+            if (modul != "TInvoiceViewerForm" || (pogodak != grid.H && !IsChild(grid.H, pogodak)))
+            {
+                Console.WriteLine($"[ERROR] Na mestu klika nije grid Dokumenata (na vrhu: '{modul}').");
+                return false;
+            }
+
+            Mouse.MoveTo(tacka);
+            RunControl.Sleep(50);
+            Mouse.DoubleClick(tacka);
+            Console.WriteLine($"[SUCCESS] Dvoklik na grid Dokumenata ({tacka.X}, {tacka.Y})");
+            return true;
         }
 
         public static Window FindLogicWindow(FlaUI.Core.AutomationBase automation)
@@ -50,6 +121,57 @@ namespace AutomationRezToInterV1
             return null;
         }
 
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        private const int SW_MAXIMIZE = 3;
+
+        public static void MaximizeWindow(Window window)
+        {
+            try
+            {
+                // pokusaj preko UI Automation
+                var pattern = window.Patterns.Window.PatternOrDefault;
+                if (pattern != null)
+                {
+                    if (pattern.WindowVisualState.Value == WindowVisualState.Maximized)
+                    {
+                        Console.WriteLine("[INFO] Prozor je vec maksimizovan");
+                        return;
+                    }
+
+                    if (pattern.CanMaximize.Value)
+                    {
+                        pattern.SetWindowVisualState(WindowVisualState.Maximized);
+                        RunControl.Sleep(500);
+
+                        if (pattern.WindowVisualState.Value == WindowVisualState.Maximized)
+                        {
+                            Console.WriteLine("[SUCCESS] Prozor maksimizovan UIA");
+                            return;
+                        }
+                    }
+                }
+
+                // pokusaj 2 direktno preko windows (delphi prozori cfesto ne podrzvaju UIA)
+                var handle = window.Properties.NativeWindowHandle.ValueOrDefault;
+                if (handle != IntPtr.Zero)
+                {
+                    ShowWindow(handle, SW_MAXIMIZE);
+                    RunControl.Sleep(500);
+                    Console.WriteLine("[SUCCESS] Prozor maximizovan (ShowWindow)");
+                    return;
+                }
+
+                Console.WriteLine("[WARNING] Nisam uspeo da maximizuje prozor.");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Console.WriteLine($"[WARNING] Greska pri maksimizovanju : {ex.Message}");
+            }
+        }
+
         public static bool PerformSafeClickToDocuments(Window window, int x, int y)
         {
             try
@@ -58,7 +180,7 @@ namespace AutomationRezToInterV1
                 var rect = window.BoundingRectangle;
                 var point = new System.Drawing.Point((int)rect.Left + x, (int)rect.Top + y);
                 Mouse.MoveTo(point);
-                Thread.Sleep(100);
+                RunControl.Sleep(100);
                 Mouse.Click();
 
                 return true;
@@ -82,7 +204,7 @@ namespace AutomationRezToInterV1
                     return w;
 
                 }
-                Thread.Sleep(200);
+                RunControl.Sleep(200);
             }
             return null;
         }
@@ -110,7 +232,7 @@ namespace AutomationRezToInterV1
             editFields[1].AsTextBox().Text = config.Username;
 
 
-            Console.WriteLine($"[INFO] Unosim podatke za prijavu {config.Username} {config.Password} ");
+            Console.WriteLine($"[INFO] Unosim podatke za prijavu: {config.Username}");
 
             buttons[1].Click();
             Console.WriteLine("[INFO] kliknuto Uredu");
@@ -141,7 +263,7 @@ namespace AutomationRezToInterV1
             for (int i = 0; i < numberOfDoubleClicks; i++)
             {
                 Mouse.DoubleClick(targerDoc.GetClickablePoint());
-                Thread.Sleep(300);
+                RunControl.Sleep(300);
             }
 
         }
@@ -172,19 +294,19 @@ namespace AutomationRezToInterV1
             }
             logikProzor.Focus();
 
-            Thread.Sleep(200);
+            RunControl.Sleep(200);
 
             Keyboard.Press(VirtualKeyShort.DOWN);
-            Thread.Sleep(200);
+            RunControl.Sleep(200);
 
 
             var textBox = document.AsTextBox();
             textBox.Text = "";
-            Thread.Sleep(100);
+            RunControl.Sleep(100);
 
-            Keyboard.Type(config.RezervationNumber);
+            RunControl.TypeText(config.RezervationNumber);
             //document.AsTextBox().Text = config.RezervationNumber;
-            Thread.Sleep(300);
+            RunControl.Sleep(300);
 
             Keyboard.Press(VirtualKeyShort.ENTER);
 
@@ -209,17 +331,17 @@ namespace AutomationRezToInterV1
             {
                 grid.Focus();
 
-                Thread.Sleep(800);
+                RunControl.Sleep(400);
 
                 Keyboard.Press(VirtualKeyShort.HOME);
-                Thread.Sleep(300);
+                RunControl.Sleep(150);
 
 
                 var rect = grid.BoundingRectangle;
                 var firstRowPoint = new System.Drawing.Point(rect.Left + 50, rect.Top + 35);
 
                 Mouse.MoveTo(firstRowPoint);
-                Thread.Sleep(150);
+                RunControl.Sleep(50);
                 Mouse.DoubleClick(firstRowPoint);
 
                 Console.WriteLine("[INFO] Kliknuto na prvu rezervaciju");
@@ -255,7 +377,7 @@ namespace AutomationRezToInterV1
             {
                 rezWindow = desktop.FindFirstDescendant(cf => cf.ByName("Rezervacija"))?.AsWindow();
                 if (rezWindow != null) break;
-                Thread.Sleep(100);
+                RunControl.Sleep(100);
             }
 
             // nadji prozor reservacija 
@@ -267,7 +389,7 @@ namespace AutomationRezToInterV1
                 Console.WriteLine("[ERROR] Prozor 'Rezervacija' se nije otvorio na vreme nakon dvoklika!");
                 return false;
             }
-            Thread.Sleep(300);
+            RunControl.Sleep(300);
 
             // nadji dugme otnjizi
             var unbookButton = rezWindow.FindFirstDescendant(cf => cf.ByName("Otknjiži"))?.AsButton();
@@ -310,7 +432,7 @@ namespace AutomationRezToInterV1
                     }
                 }
                 if (prozorPojavljen) break;
-                Thread.Sleep(100);
+                RunControl.Sleep(100);
 
 
                 if (!prozorPojavljen)
@@ -361,7 +483,8 @@ namespace AutomationRezToInterV1
                 for (int i = 0; i < step.count; i++)
                 {
                     Keyboard.Press(step.key);
-                    Thread.Sleep(step.delay);
+                    RunControl.Sleep(step.delay);
+
 
                 }
             }
@@ -396,6 +519,620 @@ namespace AutomationRezToInterV1
             }
         }
 
+        public static void DumpWindowToFile(AutomationElement root, string fileName)
+        {
+            var sb = new StringBuilder();
+            int i = 0;
+            foreach (var el in root.FindAllDescendants())
+            {
+                string tip = "", ime = "", klasa = "", vrednost = "";
+                try { tip = el.ControlType.ToString(); } catch { }
+                try { ime = el.Name; } catch { }
+                try { klasa = el.ClassName; } catch { }
+                try { if (el.Patterns.Value.IsSupported) vrednost = el.Patterns.Value.Pattern.Value.Value; } catch { }
+                System.Drawing.Rectangle r = default;
+                try { r = el.BoundingRectangle; } catch { }
+                sb.AppendLine($"[{i++}] {tip} | Klasa: {klasa} | Ime: {ime} | Vrednost: | {vrednost} | Poz: {r.X},{r.Y}");
+            }
+            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, fileName), sb.ToString());
+
+        }
+
+        private delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+        [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hWnd, StringBuilder sb, int max);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, StringBuilder lParam);
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+
+        [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr hWnd);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, StringBuilder sb, int max);
+
+        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(System.Drawing.Point p);
+        [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
+
+        [DllImport("user32.dll")] private static extern IntPtr GetParent(IntPtr hWnd);
+
+        private static string KlasaProzora(IntPtr h)
+        {
+            var sb = new StringBuilder(256);
+            GetClassName(h, sb, 256);
+            return sb.ToString();
+        }
+
+        // koji modul (…ViewerForm) je na vrhu na datoj tački ekrana
+        private static string ModulNaTacki(System.Drawing.Point tacka)
+        {
+            IntPtr h = WindowFromPoint(tacka);
+            while (h != IntPtr.Zero)
+            {
+                string k = KlasaProzora(h);
+                if (k.EndsWith("ViewerForm")) return k;
+                h = GetParent(h);
+            }
+            return "(nepoznato)";
+        }
+
+        private static IntPtr NadjiFormu(IntPtr root, string klasa) =>
+            GetChildFields(root).FirstOrDefault(p => p.Klasa == klasa)?.H ?? IntPtr.Zero;
+        private const uint BM_CLICK = 0x00F5;
+        [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
+
+        private static Polje NadjiDonjiLeviPanel(IntPtr logikHwnd)
+        {
+            GetWindowRect(logikHwnd, out var wr);
+            return GetChildFields(logikHwnd)
+                .Where(p => p.Klasa == "TPanel" && IsWindowVisible(p.H) && Math.Abs(p.R.Left - wr.Left) < 15)
+                .OrderByDescending(p => p.R.Top)
+                .FirstOrDefault();
+        }
+
+        public static void IzmeriPomerajDokumenti(Window logik, int staroX, int staroY)
+        {
+            IntPtr h = logik.Properties.NativeWindowHandle.Value;
+            GetWindowRect(h, out var wr);
+            var panel = NadjiDonjiLeviPanel(h);
+            if (panel == null) { Console.WriteLine("[TEST] Panel nije nađen."); return; }
+
+            int dx = (wr.Left + staroX) - panel.R.Left;
+            int dy = (wr.Top + staroY) - panel.R.Top;
+            Console.WriteLine($"[TEST] Prozor: {wr.Left},{wr.Top}  Panel: {panel.R.Left},{panel.R.Top} - {panel.R.Right},{panel.R.Bottom}");
+            Console.WriteLine($"[TEST] Pomeraj u odnosu na panel: X={dx}, Y={dy}");
+        }
+
+        public static bool KlikniDokumenti(Window logik, int dx = 70, int dy = 130)
+        {
+            IntPtr h = logik.Properties.NativeWindowHandle.Value;
+            var panel = NadjiDonjiLeviPanel(h);
+            if (panel == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim donji levi panel sa dugmetom Dokumenti.");
+                return false;
+            }
+
+            int sirina = panel.R.Right - panel.R.Left;
+            int visina = panel.R.Bottom - panel.R.Top;
+            if (dx >= sirina || dy >= visina)
+            {
+                Console.WriteLine($"[ERROR] Panel je {sirina}x{visina}, klik ({dx},{dy}) bi pao van njega.");
+                return false;
+            }
+
+            logik.Focus();
+            RunControl.Sleep(150);
+            Mouse.Click(new System.Drawing.Point(panel.R.Left + dx, panel.R.Top + dy));
+            Console.WriteLine($"[SUCCESS] Klik na Dokumenti (panel + {dx},{dy})");
+            return true;
+        }
+        private const uint WM_GETTEXT = 0x000D;
+
+        public class RezInfo { public string Broj = ""; public string Partner = ""; public string Komentar = ""; }
+
+
+        private class Polje { public IntPtr H; public string Klasa = ""; public string Tekst = ""; public RECT R; }
+
+        private static List<Polje> GetChildFields(IntPtr root)
+        {
+            var lista = new List<Polje>();
+            EnumChildWindows(root, (h, _) =>
+            {
+                var cls = new StringBuilder(256); GetClassName(h, cls, 256);
+                var txt = new StringBuilder(1024); SendMessage(h, WM_GETTEXT, (IntPtr)1024, txt);
+                GetWindowRect(h, out var r);
+                lista.Add(new Polje { H = h, Klasa = cls.ToString(), Tekst = txt.ToString().Trim(), R = r });
+                return true;
+            }, IntPtr.Zero);
+            return lista;
+        }
+
+        public static RezInfo ProcitajRezervaciju(IntPtr hwnd)
+        {
+            var edits = GetChildFields(hwnd).Where(p => p.Klasa == "TDBEdit").ToList();
+
+            var broj = edits.FirstOrDefault(p => Regex.IsMatch(p.Tekst, @"^\d+/\d{2}/\d+$"));
+            if (broj == null) return null;
+
+            var partner = edits.Where(p => Math.Abs(p.R.Top - broj.R.Top) < 5 && p.R.Left > broj.R.Left)
+                               .OrderBy(p => p.R.Left).FirstOrDefault();
+
+            var drugiRed = edits.Where(p => p.R.Top > broj.R.Top + 10)
+                                .GroupBy(p => p.R.Top).OrderBy(g => g.Key).FirstOrDefault();
+            var komentar = drugiRed?.OrderBy(p => p.R.Left).Skip(1).FirstOrDefault();
+
+            return new RezInfo { Broj = broj.Tekst, Partner = partner?.Tekst ?? "", Komentar = komentar?.Tekst ?? "" };
+        }
+
+        public static bool UnesiKomentarInterniPrenos(FlaUI.Core.AutomationBase automation, string komentar)
+        {
+            var prozor = FindWindow(automation, "Interni prenos");
+            if (prozor == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim prozor Interni prenos.");
+                return false;
+            }
+            IntPtr hwnd = prozor.Properties.NativeWindowHandle.Value;
+
+            // Komentar = drugo polje sleva u drugom redu TDBEdit polja
+            var edits = GetChildFields(hwnd).Where(p => p.Klasa == "TDBEdit").ToList();
+            var redovi = edits.GroupBy(p => p.R.Top).OrderBy(g => g.Key).ToList();
+            if (redovi.Count < 2)
+            {
+                Console.WriteLine("[ERROR] Ne prepoznajem raspored polja u Internom prenosu.");
+                return false;
+            }
+            var polje = redovi[1].OrderBy(p => p.R.Left).Skip(1).FirstOrDefault();
+            if (polje == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim polje za komentar.");
+                return false;
+            }
+
+            // Klik u polje, selektuj postojeći tekst, kucaj preko njega
+            prozor.Focus();
+            RunControl.Sleep(200);
+            var centar = new System.Drawing.Point((polje.R.Left + polje.R.Right) / 2, (polje.R.Top + polje.R.Bottom) / 2);
+            Mouse.Click(centar);
+            RunControl.Sleep(150);
+            Keyboard.Press(VirtualKeyShort.HOME);
+            Keyboard.TypeSimultaneously(VirtualKeyShort.SHIFT, VirtualKeyShort.END);
+            RunControl.Sleep(100);
+            RunControl.TypeText(komentar);
+            RunControl.Sleep(200);
+
+            // Provera: pročitaj polje nazad
+            var sb = new StringBuilder(1024);
+            SendMessage(polje.H, WM_GETTEXT, (IntPtr)1024, sb);
+            string upisano = sb.ToString().Trim();
+            if (!upisano.Equals(komentar.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[ERROR] Komentar nije upisan kako treba. U polju piše: '{upisano}'");
+                return false;
+            }
+
+            Keyboard.Press(VirtualKeyShort.ENTER);   // kao i ranije, potvrda unosa
+            RunControl.Sleep(300);
+            Console.WriteLine($"[SUCCESS] Komentar upisan i proveren: '{upisano}'");
+            return true;
+        }
+
+        public static bool ProveriRezervacijuPreOtknjizavanja(FlaUI.Core.AutomationBase automation, UserInputConfig config,
+         string naslov = "PROVERI PRE OTKNJIŽAVANJA", bool traziPotvrdu = true)
+
+        {
+            Window rezProzor = null;
+            for (int i = 0; i < 30 && rezProzor == null; i++)
+            {
+                rezProzor = FindWindow(automation, "Rezervacija");
+                if (rezProzor == null) RunControl.Sleep(100);
+            }
+            if (rezProzor == null)
+            {
+                Console.WriteLine("[STOP] Prozor Rezervacija se nije otvorio. Ništa nije otknjiženo.");
+                return false;
+            }
+
+            var info = ProcitajRezervaciju(rezProzor.Properties.NativeWindowHandle.Value);
+            string ocekivano = $"{config.RezervationNumber}/{DateTime.Now:yy}/";
+            bool brojOk = info != null && info.Broj.StartsWith(ocekivano);
+
+            Console.WriteLine();
+            Console.WriteLine("==========================================");
+            Console.WriteLine($"  {naslov}");
+            Console.WriteLine($"  Rezervacija: {info?.Broj} {(brojOk ? "" : "  <<< NE POKLAPA SE!")}");
+            Console.WriteLine($"  Partner:     {info?.Partner}");
+            Console.WriteLine($"  Komentar:    {info?.Komentar}");
+            Console.WriteLine($"  Plaćanje:    {config.Payment}");
+            Console.WriteLine("==========================================");
+
+            if (!brojOk)
+            {
+                Console.Beep(300, 800);
+                Console.WriteLine($"[STOP] Očekivao sam {ocekivano}..., otvorena je pogrešna rezervacija. Ništa nije otknjiženo.");
+                return false;
+            }
+            if (!traziPotvrdu) return true;
+
+            Console.Beep(1000, 300);
+            Console.WriteLine("  PAUSE = nastavi (otknjiži)   |   SCROLL LOCK = pogrešna, prekini");
+            if (!RunControl.WaitForDecision())
+            {
+                Console.WriteLine("[STOP] Prekinuto na tvoj zahtev. Ništa nije otknjiženo.");
+                return false;
+            }
+            return true;
+        }
+
+        public static bool IzaberiStavkuMenija(FlaUI.Core.AutomationBase automation, string nazivStavke, int timeoutMs = 3000)
+        {
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                RunControl.Checkpoint();
+                try
+                {
+                    var menus = automation.GetDesktop().FindAllChildren(cf =>
+                        cf.ByControlType(ControlType.Menu).Or(cf.ByClassName("#32768")));
+
+                    foreach (var m in menus)
+                    {
+                        var stavka = m.FindAllDescendants(cf => cf.ByControlType(ControlType.MenuItem))
+                            .FirstOrDefault(s => string.Equals(s.Name?.Trim(), nazivStavke, StringComparison.OrdinalIgnoreCase));
+
+                        if (stavka != null)
+                        {
+                            if (!stavka.IsEnabled)
+                            {
+                                Console.WriteLine($"[ERROR] Stavka '{nazivStavke}' postoji, ali je neaktivna.");
+                                return false;
+                            }
+                            try { stavka.AsMenuItem().Invoke(); }
+                            catch { stavka.Click(); }
+                            Console.WriteLine($"[SUCCESS] Izabrano iz menija: '{nazivStavke}'");
+                            return true;
+                        }
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException) { }
+                RunControl.Sleep(100);
+            }
+            Console.WriteLine($"[ERROR] Meni sa stavkom '{nazivStavke}' se nije pojavio.");
+            return false;
+        }
+
+        public static string ProcitajTekstPolja(AutomationElement el)
+        {
+            if (el == null) return "";
+            try { if (el.Patterns.Value.IsSupported) { var v = el.Patterns.Value.Pattern.Value.Value; if (!string.IsNullOrWhiteSpace(v)) return v.Trim(); } } catch { }
+            try { if (el.Patterns.Text.IsSupported) { var t = el.Patterns.Text.Pattern.DocumentRange.GetText(-1); if (!string.IsNullOrWhiteSpace(t)) return t.Trim(); } } catch { }
+            try
+            {
+                var h = el.Properties.NativeWindowHandle.ValueOrDefault;
+                if (h != IntPtr.Zero)
+                {
+                    var sb = new StringBuilder(256);
+                    SendMessage(h, WM_GETTEXT, (IntPtr)256, sb);
+                    return sb.ToString().Trim();
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        public static bool PosaljiNaKasu(FlaUI.Core.AutomationBase automation)
+        {
+            var rezZaKasu = FindWindow(automation, "Rezervacija");
+            if (rezZaKasu == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim prozor Rezervacija za slanje na kasu.");
+                return false;
+            }
+
+            ClickAndMeasure(rezZaKasu, "Kopiraj");
+            if (!IzaberiStavkuMenija(automation, "Pošalji u Logik Kasu"))
+                return false;
+
+            // PRIVREMENO: snimamo šta iskoči posle slanja
+            RunControl.Sleep(1000);
+            DumpForegroundWindow("kasa_prozor.txt");
+            Console.WriteLine("[INFO] Poslato na kasu. Ostatak za sada ručno.");
+            return true;
+        }
+
+        public static void DumpOpenMenus(FlaUI.Core.AutomationBase automation, string fileName)
+        {
+            var sb = new StringBuilder();
+            var menus = automation.GetDesktop().FindAllChildren(cf =>
+                cf.ByControlType(ControlType.Menu).Or(cf.ByClassName("#32768")));
+            sb.AppendLine($"Otvorenih menija: {menus.Length}");
+
+            foreach (var m in menus)
+            {
+                sb.AppendLine("---- meni ----");
+                foreach (var item in m.FindAllDescendants())
+                {
+                    string ime = "", tip = ""; bool aktivno = false;
+                    try { ime = item.Name; } catch { }
+                    try { tip = item.ControlType.ToString(); } catch { }
+                    try { aktivno = item.IsEnabled; } catch { }
+                    sb.AppendLine($"{tip} | {ime} | aktivno: {aktivno}");
+                }
+            }
+
+            string putanja = Path.Combine(AppContext.BaseDirectory, fileName);
+            File.WriteAllText(putanja, sb.ToString());
+            System.Diagnostics.Process.Start("notepad.exe", putanja);
+        }
+
+        public static AutomationElement PostaviTipDokumenta(AutomationElement logikProzor, string zeljeniTip, int maxKlikova = 12)
+        {
+            var polje = GetSpecificDocument(logikProzor, 0);
+            if (polje == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim polje Tip.");
+                return null;
+            }
+
+            string trenutno = ProcitajTekstPolja(polje);
+            for (int i = 0; i <= maxKlikova; i++)
+            {
+                Console.WriteLine($"[DEBUG] Tip posle {i} klikova: '{trenutno}'");
+                if (trenutno.Equals(zeljeniTip, StringComparison.OrdinalIgnoreCase))
+                    return polje;
+                if (i == maxKlikova) break;
+
+                string pre = trenutno;
+                polje.Focus();
+                Mouse.DoubleClick(polje.GetClickablePoint());
+
+                // čekamo da se vrednost promeni, najviše 800 ms
+                var sw = Stopwatch.StartNew();
+                do
+                {
+                    RunControl.Sleep(50);
+                    trenutno = ProcitajTekstPolja(polje);
+                }
+                while (trenutno == pre && sw.ElapsedMilliseconds < 800);
+            }
+
+            Console.WriteLine($"[ERROR] Ni posle {maxKlikova} klikova Tip nije '{zeljeniTip}'.");
+            return null;
+        }
+
+        public static string CekajPrviOdProzora(FlaUI.Core.AutomationBase automation, string[] imena, int timeoutMs = 5000)
+        {
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                foreach (var w in automation.GetDesktop().FindAllChildren(cf => cf.ByControlType(ControlType.Window)))
+                {
+                    string ime = "";
+                    try { ime = w.Name ?? ""; } catch { }
+                    foreach (var trazeno in imena)
+                        if (ime.Contains(trazeno)) return trazeno;
+                }
+                RunControl.Sleep(100);
+            }
+            return null;
+        }
+        public static void DumpWin32ToFile(IntPtr root, string fileName, bool otvoriNotepad = true)
+        {
+            var sb = new StringBuilder();
+            int i = 0;
+            EnumChildWindows(root, (h, _) =>
+            {
+                var cls = new StringBuilder(256);
+                GetClassName(h, cls, 256);
+                var txt = new StringBuilder(1024);
+                SendMessage(h, WM_GETTEXT, (IntPtr)1024, txt);
+                GetWindowRect(h, out var r);
+                sb.AppendLine($"[{i++}] {cls} | Tekst: {txt} | Poz: {r.Left},{r.Top}");
+                return true;
+            }, IntPtr.Zero);
+
+            string putanja = Path.Combine(AppContext.BaseDirectory, fileName);
+            File.WriteAllText(putanja, sb.ToString());
+            if (otvoriNotepad) System.Diagnostics.Process.Start("notepad.exe", putanja);
+
+        }
+
+        public static void IspisiProzoreProcesa(FlaUI.Core.AutomationBase automation, int processId)
+        {
+            Console.WriteLine("[DEBUG] Otvoreni prozori Logika u ovom trenutku:");
+            foreach (var el in automation.GetDesktop().FindAllChildren(cf => cf.ByControlType(ControlType.Window)))
+            {
+                try
+                {
+                    if (el.Properties.ProcessId.ValueOrDefault != processId) continue;
+                    string ime = el.Name ?? "";
+                    Console.WriteLine($"   '{ime}' | klasa: {el.ClassName}");
+                    if (ime.StartsWith("Logik")) continue;   // glavni prozor preskačemo, ima previše polja
+
+                    IntPtr h = el.Properties.NativeWindowHandle.ValueOrDefault;
+                    if (h != IntPtr.Zero)
+                        foreach (var p in GetChildFields(h).Where(p => p.Tekst != ""))
+                            Console.WriteLine($"      - {p.Klasa}: {p.Tekst}");
+                    foreach (var t in el.FindAllDescendants(cf => cf.ByControlType(ControlType.Text)))
+                        Console.WriteLine($"      - tekst: {t.Name}");
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException) { }
+            }
+        }
+        public static bool KlikniDugmeWin32(Window prozor, string tekstDugmeta, string unutarKlase = null)
+
+
+        {
+            IntPtr hwnd = prozor.Properties.NativeWindowHandle.Value;
+            IntPtr koren = hwnd;
+            if (unutarKlase != null)
+            {
+                koren = NadjiFormu(hwnd, unutarKlase);
+                if (koren == IntPtr.Zero)
+                {
+                    Console.WriteLine($"[ERROR] Ne nalazim '{unutarKlase}'.");
+                    return false;
+                }
+            }
+            var kandidati = GetChildFields(koren).Where(p =>
+                (p.Klasa == "TButton" || p.Klasa == "TBitBtn") &&
+                p.Tekst.Replace("&", "").Equals(tekstDugmeta, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            var dugme = kandidati.FirstOrDefault(p => IsWindowVisible(p.H) && IsWindowEnabled(p.H));
+            if (dugme == null)
+            {
+                Console.WriteLine($"[ERROR] Dugme '{tekstDugmeta}': nađeno {kandidati.Count}, ali nijedno nije vidljivo i aktivno.");
+                return false;
+            }
+            if (kandidati.Count > 1)
+                Console.WriteLine($"[DEBUG] '{tekstDugmeta}' postoji {kandidati.Count} puta, uzimam vidljivo.");
+
+            SetForegroundWindow(hwnd);
+            RunControl.Sleep(150);
+
+            // miš parkiramo na samo dugme (bez klika), da ne ostane iznad nečeg drugog
+            Mouse.MoveTo(new System.Drawing.Point((dugme.R.Left + dugme.R.Right) / 2, (dugme.R.Top + dugme.R.Bottom) / 2));
+            RunControl.Sleep(50);
+
+            PostMessage(dugme.H, BM_CLICK, IntPtr.Zero, IntPtr.Zero);
+            Console.WriteLine($"[SUCCESS] Poslat klik na dugme '{tekstDugmeta}'");
+            return true;
+        }
+
+        public static bool ProveriMagacinInternogPrenosa(FlaUI.Core.AutomationBase automation, string ocekivaniMagacin)
+        {
+            var prozor = FindWindow(automation, "Interni prenos");
+            if (prozor == null)
+            {
+                Console.WriteLine("[ERROR] Interni prenos nije otvoren za proveru magacina.");
+                return false;
+            }
+
+            var polja = GetChildFields(prozor.Properties.NativeWindowHandle.Value);
+            var brojDok = polja.FirstOrDefault(p => p.Klasa == "TDBEdit" && Regex.IsMatch(p.Tekst, @"^\d+/\d{2}"));
+            if (brojDok == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim broj dokumenta u internom prenosu.");
+                return false;
+            }
+
+            // magacini su TEdit polja u istom redu kao broj dokumenta, sleva nadesno
+            var magacini = polja.Where(p => p.Klasa == "TEdit" && Math.Abs(p.R.Top - brojDok.R.Top) < 5)
+                                .OrderBy(p => p.R.Left).ToList();
+            Console.WriteLine($"[DEBUG] Magacini u internom prenosu: {string.Join(" | ", magacini.Select(m => $"'{m.Tekst}'"))}");
+
+            if (magacini.Count < 2)
+            {
+                Console.WriteLine("[ERROR] Ne prepoznajem polja magacina.");
+                return false;
+            }
+
+            string ulazni = magacini[0].Tekst.Trim().TrimStart('/');
+            if (ulazni != "1")
+            {
+                Console.WriteLine($"[ERROR] Ulazni magacin je '{ulazni}', očekivao sam '1'.");
+                return false;
+            }
+
+            string izlazni = magacini[1].Tekst.Trim();   // desno polje
+            if (!izlazni.Equals(ocekivaniMagacin, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[ERROR] Magacin je '{izlazni}', očekivao sam '{ocekivaniMagacin}'.");
+                return false;
+            }
+
+            Console.WriteLine($"[SUCCESS] Magacin proveren: '{izlazni}'");
+            return true;
+        }
+
+        public static bool RazdvojiRezervaciju(FlaUI.Core.AutomationBase automation, UserInputConfig config)
+        {
+            // Nađi prozor "Rezervacija" koji ima dugme "Razdvoji rezervaciju"
+            Window mali = null;
+            for (int i = 0; i < 30 && mali == null; i++)
+            {
+                foreach (var w in automation.GetDesktop().FindAllChildren(cf => cf.ByControlType(ControlType.Window)))
+                {
+                    try
+                    {
+                        if (!(w.Name ?? "").Contains("Rezervacija")) continue;
+                        var h = w.Properties.NativeWindowHandle.ValueOrDefault;
+                        if (h != IntPtr.Zero && GetChildFields(h).Any(p => p.Tekst.Replace("&", "") == "Razdvoji rezervaciju"))
+                        {
+                            mali = w.AsWindow();
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+                if (mali == null) RunControl.Sleep(100);
+            }
+            if (mali == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim prozor sa dugmetom 'Razdvoji rezervaciju'.");
+                return false;
+            }
+
+            // Provera da je povezana rezervacija ona koju obrađujemo
+            string ocekivano = $" {config.RezervationNumber}/{DateTime.Now:yy}/";
+            var polja = GetChildFields(mali.Properties.NativeWindowHandle.Value);
+            var oznaka = polja.FirstOrDefault(p => p.Klasa == "TEdit" && p.Tekst.StartsWith("Rezervacija"));
+            if (oznaka == null || !oznaka.Tekst.Contains(ocekivano))
+            {
+                Console.WriteLine($"[ERROR] Povezana rezervacija je '{oznaka?.Tekst}', a očekivao sam{ocekivano}...");
+                return false;
+            }
+
+            return KlikniDugmeWin32(mali, "Razdvoji rezervaciju");
+        }
+
+        public static void DumpForegroundWindow(string fileName)
+        {
+            IntPtr h = GetForegroundWindow();
+            var naslov = new StringBuilder(256);
+            GetWindowText(h, naslov, 256);
+            Console.WriteLine($"[DEBUG] Aktivni prozor: '{naslov}'");
+            DumpWin32ToFile(h, fileName, otvoriNotepad: false);
+        }
+
+        public static bool ProveriKomentarInternogPrenosa(FlaUI.Core.AutomationBase automation, string ocekivaniKomentar)
+        {
+            Window prozor = null;
+            for (int i = 0; i < 30 && prozor == null; i++)
+            {
+                prozor = FindWindow(automation, "Interni prenos");
+                if (prozor == null) RunControl.Sleep(100);
+            }
+            if (prozor == null)
+            {
+                Console.WriteLine("[ERROR] Interni prenos nije otvoren.");
+                return false;
+            }
+
+            IntPtr hwnd = prozor.Properties.NativeWindowHandle.Value;
+            string komentar = "";
+            for (int i = 0; i < 15; i++)   // do 3 s da se podaci učitaju
+            {
+                var redovi = GetChildFields(hwnd).Where(p => p.Klasa == "TDBEdit")
+                             .GroupBy(p => p.R.Top).OrderBy(g => g.Key).ToList();
+                komentar = redovi.Count >= 2
+                    ? redovi[1].OrderBy(p => p.R.Left).Skip(1).FirstOrDefault()?.Tekst ?? ""
+                    : "";
+
+                if (komentar.Equals(ocekivaniKomentar.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine($"[SUCCESS] Otvoren je pravi interni prenos (komentar '{komentar}').");
+                    return true;
+                }
+                RunControl.Sleep(200);
+            }
+            Console.WriteLine($"[ERROR] Otvoreni interni prenos ima komentar '{komentar}', očekivao sam '{ocekivaniKomentar}'.");
+            return false;
+        }
+
         private static string GetSafeInfo(AutomationElement el)
         {
             string tip = "Nepoznat";
@@ -422,7 +1159,7 @@ namespace AutomationRezToInterV1
                     Console.WriteLine($"[INFO] Meni '{menuName}' detektovan!");
                     return true;
                 }
-                Thread.Sleep(50);
+                RunControl.Sleep(50);
             }
             return false;
         }
@@ -449,6 +1186,7 @@ namespace AutomationRezToInterV1
 
         public static void StopWatchSteps(string imeKoraka, Action akcija)
         {
+            RunControl.Checkpoint();
             Stopwatch sw = Stopwatch.StartNew();
             akcija(); // Izvršava se kod koji proslediš
             sw.Stop();
@@ -485,7 +1223,7 @@ namespace AutomationRezToInterV1
 
 
                 }
-                Thread.Sleep(200);
+                RunControl.Sleep(200);
             }
             Console.WriteLine($"[ERROR] Dijalog {dialogName} nije nađen ili dugme nije dostupno.");
             return false;
@@ -514,7 +1252,7 @@ namespace AutomationRezToInterV1
 
                 // window = desktop.FindFirstDescendant(cf => cf.ByName("Magacini"))?.AsWindow();
                 if (window != null) break;
-                Thread.Sleep(100);
+                RunControl.Sleep(100);
             }
 
 
@@ -524,7 +1262,7 @@ namespace AutomationRezToInterV1
                 return false;
             }
 
-            Thread.Sleep(300);
+            RunControl.Sleep(300);
 
             // pronadji edit polje 
             var editFiled = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Edit));
@@ -532,23 +1270,23 @@ namespace AutomationRezToInterV1
             {
                 var searchField = editFiled[0].AsTextBox();
                 searchField.Focus();
-                Thread.Sleep(100);
+                RunControl.Sleep(100);
 
 
                 // kucamo tekst
                 searchField.Text = warehouseCode;
-                Thread.Sleep(200);
+                RunControl.Sleep(200);
 
 
 
 
 
-                // pronadji dugme ptrraga
+                // pronadji dugme pretraga
                 var searchButton = window.FindFirstDescendant(cf => cf.ByName("Pretraga"))?.AsButton();
                 if (searchButton != null)
                 {
                     searchButton.Click();
-                    Thread.Sleep(800);
+                    RunControl.Sleep(800);
                 }
 
 
@@ -567,7 +1305,7 @@ namespace AutomationRezToInterV1
                     return true;
                 }
 
-                Thread.Sleep(200);
+                RunControl.Sleep(200);
             }
 
 
@@ -626,7 +1364,7 @@ namespace AutomationRezToInterV1
             if (tabItem != null)
             {
                 tabItem.Click();
-                Thread.Sleep(200); // Kratka pauza za renderovanje
+                RunControl.Sleep(200); // Kratka pauza za renderovanje
                 Console.WriteLine($"[INFO] Tab '{tabName}' je selektovan.");
             }
         }
@@ -637,13 +1375,13 @@ namespace AutomationRezToInterV1
             if (window == null) return;
 
             window.Focus(); // Osiguraj da je prozor u fokusu
-            Thread.Sleep(300);
+            RunControl.Sleep(300);
 
             // 1. Pritisni TAB onoliko puta koliko je potrebno
             for (int i = 0; i < tabCount; i++)
             {
                 Keyboard.Press(VirtualKeyShort.TAB);
-                Thread.Sleep(100); // Kratka pauza između tabova
+                RunControl.Sleep(100); // Kratka pauza između tabova
             }
 
             // 2. Sada je fokus verovatno na polju za komentar
@@ -671,18 +1409,19 @@ namespace AutomationRezToInterV1
                 // Uzimamo prvo polje (ako je pogrešno, samo promeni indeks u [1])
                 var commentBox = allEdits[0].AsTextBox();
                 commentBox.Focus();
-                Thread.Sleep(300);
+                RunControl.Sleep(300);
 
                 // Formiramo string direktno iz config-a
                 string fullComment = $"{config.Payment} {config.RezervationNumber}";
 
                 // Čistimo i kucamo
                 commentBox.Text = string.Empty;
-                Keyboard.Type(fullComment);
+
+                RunControl.TypeText(fullComment);
 
                 // Enter da "zalepi" tekst u Logik
                 Keyboard.Press(VirtualKeyShort.ENTER);
-                Thread.Sleep(500);
+                RunControl.Sleep(500);
 
                 Console.WriteLine($"[SUCCESS] Upisan komentar: {fullComment}");
             }
@@ -710,38 +1449,27 @@ namespace AutomationRezToInterV1
                         return true;
                     }
                 }
-                Thread.Sleep(100); // Proveravamo na svakih 50ms (ultra brzo, a efikasno)
+                RunControl.Sleep(100); // Proveravamo na svakih 50ms (ultra brzo, a efikasno)
             }
 
             Console.WriteLine($"[INFO] Dijalog '{dialogName}' se nije pojavio, idem dalje.");
             return false; // Vraća false, ali program NE PADA
         }
 
-        public static void WaitForAndProcessInterniPrenos(FlaUI.Core.AutomationBase automation)
+        public static bool WaitForAndProcessInterniPrenos(FlaUI.Core.AutomationBase automation, int timeoutMs = 8000)
         {
-            Console.WriteLine("[INFO] Čekam da se otvori prozor 'Interni prenos'...");
-
-            // Čekamo do 5 sekundi (10 pokušaja po 500ms)
-            FlaUI.Core.AutomationElements.Window interniWindow = null;
-
-            for (int i = 0; i < 300; i++)
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
             {
-                // interniWindow = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName("Interni prenos"))?.AsWindow();
-                interniWindow = FindWindow(automation, "Interni prenos");
-
-                if (interniWindow != null) break;
-                Thread.Sleep(50);
+                if (FindWindow(automation, "Interni prenos") != null)
+                {
+                    Console.WriteLine("[SUCCESS] Prozor 'Interni prenos' pronađen");
+                    return true;
+                }
+                RunControl.Sleep(100);
             }
-
-            if (interniWindow == null)
-            {
-                Console.WriteLine("[ERROR] Prozor 'Interni prenos' se nije pojavio ni posle 5 sekundi!");
-                return;
-            }
-
-            Console.WriteLine("[SUCCESS] Prozor 'Interni prenos' pronađen");
-
-            // Sada imaš prozor i možeš da radiš sa tabovima i poljima
+            Console.WriteLine($"[ERROR] Prozor 'Interni prenos' se nije pojavio za {timeoutMs / 1000}s.");
+            return false;
         }
 
         public static void PerformTabSequenceAndInput(FlaUI.Core.AutomationBase automation, UserInputConfig config)
@@ -752,20 +1480,20 @@ namespace AutomationRezToInterV1
             if (window != null)
             {
                 window.Focus();
-                Thread.Sleep(500); // Sačekaj da prozor stvarno dobije fokus
+                RunControl.Sleep(500); // Sačekaj da prozor stvarno dobije fokus
 
                 // 2. Simuliraj 5 pritisaka tastera TAB
                 for (int i = 0; i < 4; i++)
                 {
                     FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
-                    Thread.Sleep(200); // Mala pauza između tabova da aplikacija stigne da odreaguje
+                    RunControl.Sleep(200); // Mala pauza između tabova da aplikacija stigne da odreaguje
                     Console.WriteLine($"[INFO] Pritisnut TAB {i + 1}");
                 }
                 string input = $"{config.Payment} {config.RezervationNumber}";
 
                 // 3. Unesi vrednost
-                FlaUI.Core.Input.Keyboard.Type(input);
-                Thread.Sleep(200);
+                RunControl.TypeText(input);
+                RunControl.Sleep(200);
                 FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
                 window.Focus();
 
@@ -782,7 +1510,7 @@ namespace AutomationRezToInterV1
             for (int i = 0; i < tabCount; i++)
             {
                 FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
-                Thread.Sleep(150); // Možemo malo smanjiti pauzu ako je mašina brza
+                RunControl.Sleep(150); // Možemo malo smanjiti pauzu ako je mašina brza
             }
 
             // 2. Potvrda
@@ -798,15 +1526,15 @@ namespace AutomationRezToInterV1
 
             // 2. Pomeramo miša na te koordinate (ovo ga dovodi do polja)
             Mouse.MoveTo(point);
-            Thread.Sleep(50); // Kratka pauza da miš stigne
+            RunControl.Sleep(50); // Kratka pauza da miš stigne
 
             // 3. Klikćemo
             Mouse.Click(point);
-            Thread.Sleep(50);
+            RunControl.Sleep(50);
 
             // 4. Sada šaljemo tastere (pošto je miš sad sigurno tamo gde treba)
             Keyboard.Press(VirtualKeyShort.DOWN);
-            Thread.Sleep(50);
+            RunControl.Sleep(50);
             Keyboard.Press(VirtualKeyShort.ENTER);
         }
 
@@ -818,7 +1546,7 @@ namespace AutomationRezToInterV1
             // 2. Klikćemo direktno tu (nema pomeranja miša, nema pretrage)
             // Smanjili smo Sleep na apsolutni minimum od 20ms
             Mouse.Click(point);
-            Thread.Sleep(20);
+            RunControl.Sleep(20);
 
             Console.WriteLine("[INFO] Brzi klik na element obavljen.");
         }
@@ -827,15 +1555,15 @@ namespace AutomationRezToInterV1
             FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
 
             // OBAVEZNO čekamo pola sekunde da UI stigne da iscrta taj novi mali meni na ekranu
-            Thread.Sleep(500);
+            RunControl.Sleep(500);
 
             // 2. Strelica dole (da pređemo na prvu opciju u tom podmeniju)
             FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.DOWN);
-            Thread.Sleep(500);
+            RunControl.Sleep(500);
 
             // 3. Enter (da potvrdimo izbor te opcije i zatvorimo podmeni)
             FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-            Thread.Sleep(500);
+            RunControl.Sleep(500);
 
             Console.WriteLine("[INFO] Podmeni uspesno otvoren, prva opcija izabrana.");
         }
@@ -855,11 +1583,11 @@ namespace AutomationRezToInterV1
                 Console.WriteLine("[INFO] Miš je uspešno kliknuo na fokusirano dugme.");
 
                 // Čekamo malo da se taj podmeni pojavi na ekranu
-                Thread.Sleep(500);
+                RunControl.Sleep(500);
 
                 // 4. Kad se meni otvorio od klika, strelicom dole biramo prvu opciju
                 FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.DOWN);
-                Thread.Sleep(500);
+                RunControl.Sleep(500);
 
                 // 5. Potvrđujemo enterom
                 FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
@@ -871,14 +1599,24 @@ namespace AutomationRezToInterV1
             }
         }
 
+        public static bool OtvoriDokumentiPrecicom(Window logik)
+        {
+            IntPtr h = logik.Properties.NativeWindowHandle.Value;
+            SetForegroundWindow(h);
+            RunControl.Sleep(150);
+            Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.F5);
+            Console.WriteLine("[INFO] Poslat Ctrl+F5 (Dokumenti)");
+            return true;
+        }
+
         public static void RazdvojiRezervacijuBrzo()
         {
             Console.WriteLine("[INFO] Čekam da iskoči mali prozor...");
-            Thread.Sleep(500); // Dajemo mu pola sekunde da se pojavi na ekranu
+            RunControl.Sleep(500); // Dajemo mu pola sekunde da se pojavi na ekranu
 
             // Šaljemo TAB koji si otkrio da radi posao
             FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
-            Thread.Sleep(200);
+            RunControl.Sleep(200);
 
             // Šaljemo ENTER da potvrdimo akciju na tom dugmetu
             FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
@@ -886,6 +1624,7 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[SUCCESS] Akcija 'Razdvoji rezervaciju' uspešno izvršena tastaturom!");
         }
 
+        /*
         public static void ProknjiziInterniPrenos(FlaUI.Core.AutomationBase automation)
         {
             Console.WriteLine("[INFO] Čekam da se otvori glavni prozor 'Interni prenos'...");
@@ -919,6 +1658,29 @@ namespace AutomationRezToInterV1
                 Console.WriteLine("[GRESKA] Prozor 'Interni prenos' se nije otvorio nakon duplog klika.");
             }
         }
+        */
+
+        public static bool ProknjiziInterniPrenos(FlaUI.Core.AutomationBase automation)
+        {
+            var prozor = FindWindow(automation, "Interni prenos");
+            if (prozor == null)
+            {
+                Console.WriteLine("[ERROR] Prozor 'Interni prenos' nije otvoren.");
+                return false;
+            }
+
+            var dugme = prozor.FindFirstDescendant(cf =>
+                cf.ByName("Proknjiži").And(cf.ByControlType(ControlType.Button)))?.AsButton();
+            if (dugme == null)
+            {
+                Console.WriteLine("[ERROR] Ne vidim dugme 'Proknjiži'.");
+                return false;
+            }
+
+            Mouse.Click(dugme.GetClickablePoint());
+            Console.WriteLine("[SUCCESS] Kliknuto 'Proknjiži'");
+            return true;
+        }
 
         public static void DupliKlikNaFokusiraniRed(FlaUI.Core.AutomationBase automation)
         {
@@ -934,7 +1696,7 @@ namespace AutomationRezToInterV1
                     if (trenutniRed.Patterns.ScrollItem.IsSupported)
                     {
                         trenutniRed.Patterns.ScrollItem.Pattern.ScrollIntoView();
-                        Thread.Sleep(50); // Kratka pauza da se UI osveži nakon skrola
+                        RunControl.Sleep(50); // Kratka pauza da se UI osveži nakon skrola
                     }
 
                     // UZIMAMO PRAVOUGAONIK FOKUSIRANOG REDA
@@ -950,12 +1712,12 @@ namespace AutomationRezToInterV1
 
                     // Pomeramo miša fizički na tu tačku i radimo dvoklik
                     FlaUI.Core.Input.Mouse.Position = tackaZaKlik;
-                    Thread.Sleep(100); // Kratka pauza da se miš "smiri" na novoj lokaciji
+                    RunControl.Sleep(100); // Kratka pauza da se miš "smiri" na novoj lokaciji
 
                     FlaUI.Core.Input.Mouse.DoubleClick(FlaUI.Core.Input.MouseButton.Left);
                     Console.WriteLine($"[SUCCESS] Poslat doubleClick tačno na koordinate ({x}, {y}) reda!");
                 }
-                catch (Exception ex) // Hvatamo opšti Exception u slučaju da element nestane
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // BEKAP PLAN: Ako i pored skrola prijavi grešku, šaljemo ENTER!
                     Console.WriteLine($"[UPOZORENJE] Greška pri kliku na red: {ex.Message}. Šaljem ENTER kao zamenu...");
@@ -1056,9 +1818,9 @@ namespace AutomationRezToInterV1
 
                 var defaultKonfig = new AppConfig
                 {
-                    LogikPutanja = @"C:\Program Files (x86)\Logik\FirmA1\firma.exe",
-                    KorisnickoIme = "maloprodaja",
-                    Lozinka = "0202"
+                    LogikPutanja = @"C:\Program Files (x86)\Logik\",
+                    KorisnickoIme = "UNESI_KORISNICKO_IME",
+                    Lozinka = "UNESI_LOZINKU"
                 };
 
                 // Pretvaramo C# objekat u lep tekstualni JSON format
@@ -1072,6 +1834,10 @@ namespace AutomationRezToInterV1
             string procitanJson = File.ReadAllText(putanjaFajla);
             return JsonSerializer.Deserialize<AppConfig>(procitanJson);
         }
+
+
+
+
 
 
 
