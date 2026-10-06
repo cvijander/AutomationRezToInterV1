@@ -9,6 +9,7 @@ using System.Drawing;
 using System.Threading;
 using static AutomationRezToInterV1.AutomationHelpers;
 using static AutomationRezToInterV1.UserInputConfig;
+using System.IO;
 
 
 namespace AutomationRezToInterV1
@@ -17,15 +18,32 @@ namespace AutomationRezToInterV1
     {
         static void Main(string[] args)
         {
+            string folder = Path.Combine(AppContext.BaseDirectory, "logovi");
+            Directory.CreateDirectory(folder);
+            string logPutanja = Path.Combine(folder, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt");
+
+            var izlaz = new DvostrukiIzlaz(Console.Out, logPutanja);
+            Console.SetOut(izlaz);
+            Console.WriteLine($"[INFO] Log: {logPutanja}");
+
             try
             {
                 Run(args);
             }
             catch (OperationCanceledException)
             {
-
                 Console.WriteLine("[STOP] Rucno zaustavljam");
                 Console.ReadKey();
+            }
+            catch (Exception ex)
+            {
+                // neočekivana greška: upiši je u log, da znamo gde je puklo
+                Console.WriteLine($"[CRASH] {ex}");
+                Console.ReadKey();
+            }
+            finally
+            {
+                izlaz.Dispose();
             }
         }
 
@@ -341,7 +359,7 @@ namespace AutomationRezToInterV1
                                 // AutomationHelpers.DeepSearch(automation.GetDesktop(), 0);
                                 bool warehouseExitSelected = false;
                                 AutomationHelpers.StopWatchSteps("mp magacin", () => {
-                                    warehouseExitSelected = AutomationHelpers.SelectAndConfirmExitWarehouse(automation, "MP");
+                                    warehouseExitSelected = AutomationHelpers.IzaberiMagacinWin32(automation, "MP");
                                 });
 
 
@@ -472,7 +490,7 @@ namespace AutomationRezToInterV1
                                     return;
                                 }
 
-                                FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
+
 
                                 // 4. Čekamo još 2 sekunde da se prozor fizički pojavi na ekranu
                                 Console.WriteLine("[INFO] Čekam 2 sekunde da se prozor otvori...");
@@ -582,11 +600,23 @@ namespace AutomationRezToInterV1
                                 // Ovde će ići slanje u Logik Kasu, kad bude smelo da se testira.
 
                                 // ===== SLANJE NA KASU =====
-                                bool slanjeNaKasu = false;   // prebaci na true kad kolega odobri
+                                bool slanjeNaKasu = true;   // prebaci na true kad kolega odobri
 
                                 if (slanjeNaKasu && !AutomationHelpers.PosaljiNaKasu(automation))
                                 {
                                     Console.WriteLine("[STOP] Slanje na kasu nije uspelo. Interni prenos je ZAVRŠEN, pošalji ručno.");
+                                    Console.ReadKey();
+                                    return;
+                                }
+
+                                bool zatvorenoOk = false;
+                                AutomationHelpers.StopWatchSteps("Zatvori rezervaciju", () => {
+                                    zatvorenoOk = AutomationHelpers.ZatvoriRezervaciju(automation, "U redu");
+                                });
+                                if (!zatvorenoOk)
+                                {
+                                    Console.WriteLine("[STOP] Sve je urađeno, samo Rezervacija nije zatvorena. Zatvori je ručno.");
+                                    AutomationHelpers.IspisiProzoreProcesa(automation, app.ProcessId);
                                     Console.ReadKey();
                                     return;
                                 }

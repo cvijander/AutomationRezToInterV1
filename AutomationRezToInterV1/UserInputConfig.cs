@@ -61,7 +61,8 @@ namespace AutomationRezToInterV1
 
                 if (key == ConsoleKey.F1)
                 {
-                    
+                    //config.Username = "maloprodaja";
+                    //config.Password = "0202";
                     isValid = true;
                 }
                 else if (key == ConsoleKey.F2)

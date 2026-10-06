@@ -1193,17 +1193,14 @@ namespace AutomationRezToInterV1
             Console.WriteLine($"[PERF] Korak '{imeKoraka}' završen za {sw.ElapsedMilliseconds}ms.");
         }
 
-        public static bool ClickButtonOnDialog(FlaUI.Core.AutomationBase automation, string dialogName, string buttonName)
+        public static bool ClickButtonOnDialog(FlaUI.Core.AutomationBase automation, string dialogName, string buttonName, int timeoutMs = 8000)
         {
             Console.WriteLine($"[INFO] Trazim dijalog {dialogName}.");
-
-
-
-            for (int i = 0; i < 200; i++)
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
             {
-                var dialog = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName(dialogName))?.AsWindow();
-
-                if (dialog != null && dialog.IsOffscreen == false)
+                var dialog = FindWindow(automation, dialogName);
+                if (dialog != null && !dialog.IsOffscreen)
                 {
                     try
                     {
@@ -1211,23 +1208,16 @@ namespace AutomationRezToInterV1
                         if (button != null)
                         {
                             button.Click();
-                            Console.WriteLine($"[SUCCESS] Click  {buttonName} na dijalig {dialogName}");
+                            Console.WriteLine($"[SUCCESS] Kliknuto '{buttonName}' na dijalogu '{dialogName}'");
                             return true;
                         }
                     }
-                    catch
-                    {
-
-
-                    }
-
-
+                    catch (Exception ex) when (ex is not OperationCanceledException) { }
                 }
-                RunControl.Sleep(200);
+                RunControl.Sleep(150);
             }
-            Console.WriteLine($"[ERROR] Dijalog {dialogName} nije nađen ili dugme nije dostupno.");
+            Console.WriteLine($"[ERROR] Dijalog '{dialogName}' se nije pojavio za {timeoutMs / 1000}s.");
             return false;
-
         }
 
         public static bool SelectAndConfirmExitWarehouse(FlaUI.Core.AutomationBase automation, string warehouseCode)
@@ -1314,6 +1304,66 @@ namespace AutomationRezToInterV1
             return false;
         }
 
+        public static bool IzaberiMagacinWin32(FlaUI.Core.AutomationBase automation, string sifra)
+        {
+            Window prozor = null;
+            var sw = Stopwatch.StartNew();
+            while (prozor == null && sw.ElapsedMilliseconds < 5000)
+            {
+                prozor = FindWindow(automation, "Magacini");
+                if (prozor == null) RunControl.Sleep(100);
+            }
+            if (prozor == null)
+            {
+                Console.WriteLine("[ERROR] Prozor 'Magacini' se nije pojavio.");
+                return false;
+            }
+            IntPtr h = prozor.Properties.NativeWindowHandle.Value;
+
+            var pretraga = GetChildFields(h).FirstOrDefault(p => p.Klasa == "TEdit" && IsWindowVisible(p.H));
+            if (pretraga == null)
+            {
+                Console.WriteLine("[ERROR] Ne nalazim polje za pretragu magacina.");
+                return false;
+            }
+
+            // upiši šifru u polje za pretragu
+            SetForegroundWindow(h);
+            RunControl.Sleep(150);
+            Mouse.Click(new System.Drawing.Point((pretraga.R.Left + pretraga.R.Right) / 2, (pretraga.R.Top + pretraga.R.Bottom) / 2));
+            RunControl.Sleep(100);
+            Keyboard.Press(VirtualKeyShort.HOME);
+            Keyboard.TypeSimultaneously(VirtualKeyShort.SHIFT, VirtualKeyShort.END);
+            RunControl.TypeText(sifra);
+            RunControl.Sleep(150);
+
+            // provera: da li u polju stvarno piše šifra
+            var sb = new StringBuilder(64);
+            SendMessage(pretraga.H, WM_GETTEXT, (IntPtr)64, sb);
+            if (!sb.ToString().Trim().Equals(sifra, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[ERROR] U pretrazi piše '{sb}', očekivao sam '{sifra}'.");
+                return false;
+            }
+
+            if (!KlikniDugmeWin32(prozor, "Pretraga")) return false;
+            RunControl.Sleep(500);   // filtriranje liste; pogrešan izbor hvata ProveriMagacinInternogPrenosa
+            if (!KlikniDugmeWin32(prozor, "U redu")) return false;
+
+            // čekamo da se Magacini zatvori
+            sw.Restart();
+            while (sw.ElapsedMilliseconds < 3000)
+            {
+                if (FindWindow(automation, "Magacini") == null)
+                {
+                    Console.WriteLine($"[SUCCESS] Magacin '{sifra}' izabran.");
+                    return true;
+                }
+                RunControl.Sleep(100);
+            }
+            Console.WriteLine("[ERROR] Prozor 'Magacini' se nije zatvorio posle 'U redu'.");
+            return false;
+        }
 
 
 
@@ -1818,9 +1868,9 @@ namespace AutomationRezToInterV1
 
                 var defaultKonfig = new AppConfig
                 {
-                    LogikPutanja = @"C:\Program Files (x86)\Logik\",
-                    KorisnickoIme = "UNESI_KORISNICKO_IME",
-                    Lozinka = "UNESI_LOZINKU"
+                    LogikPutanja = @"C:\Program Files (x86)\Logik.exe",
+                    KorisnickoIme = "username",
+                    Lozinka = "pasword"
                 };
 
                 // Pretvaramo C# objekat u lep tekstualni JSON format
@@ -1835,7 +1885,32 @@ namespace AutomationRezToInterV1
             return JsonSerializer.Deserialize<AppConfig>(procitanJson);
         }
 
+        public static bool ZatvoriRezervaciju(FlaUI.Core.AutomationBase automation, string dugme = "U redu")
+        {
+            var rez = FindWindow(automation, "Rezervacija");
+            if (rez == null)
+            {
+                Console.WriteLine("[INFO] Rezervacija je već zatvorena.");
+                return true;
+            }
 
+            if (!KlikniDugmeWin32(rez, dugme))
+                return false;
+
+            // čekamo da se prozor stvarno zatvori (max 3 s)
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < 3000)
+            {
+                if (FindWindow(automation, "Rezervacija") == null)
+                {
+                    Console.WriteLine("[SUCCESS] Rezervacija zatvorena.");
+                    return true;
+                }
+                RunControl.Sleep(100);
+            }
+            Console.WriteLine("[ERROR] Rezervacija se nije zatvorila (možda je iskočio neki dijalog).");
+            return false;
+        }
 
 
 
