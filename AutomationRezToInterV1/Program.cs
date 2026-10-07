@@ -1,15 +1,8 @@
 ﻿using FlaUI.Core;
-using FlaUI.Core.AutomationElements;
-using FlaUI.Core.Input;
-using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA2;
-using System;
 using System.Diagnostics;
-using System.Drawing;
-using System.Threading;
 using static AutomationRezToInterV1.AutomationHelpers;
 using static AutomationRezToInterV1.UserInputConfig;
-using System.IO;
 
 
 namespace AutomationRezToInterV1

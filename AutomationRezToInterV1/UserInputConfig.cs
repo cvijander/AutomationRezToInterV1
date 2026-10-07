@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-
-namespace AutomationRezToInterV1
+﻿namespace AutomationRezToInterV1
 {
     public enum PaymentOption
     {
