@@ -105,21 +105,7 @@ namespace AutomationRezToInterV1
             return true;
         }
 
-        public static Window FindLogicWindow(FlaUI.Core.AutomationBase automation)
-        {
-            var desktop = automation.GetDesktop();
-
-            var windows = desktop.FindAllChildren(cf => cf.ByControlType(ControlType.Window));
-            foreach (var w in windows)
-            {
-                if (w.Name.Contains("Logik"))
-                {
-                    return w.AsWindow();
-                }
-            }
-
-            return null;
-        }
+      
 
 
         [DllImport("user32.dll")]
@@ -172,26 +158,7 @@ namespace AutomationRezToInterV1
             }
         }
 
-        public static bool PerformSafeClickToDocuments(Window window, int x, int y)
-        {
-            try
-            {
-                window.Focus();
-                var rect = window.BoundingRectangle;
-                var point = new System.Drawing.Point((int)rect.Left + x, (int)rect.Top + y);
-                Mouse.MoveTo(point);
-                RunControl.Sleep(100);
-                Mouse.Click();
-
-                return true;
-
-            }
-            catch
-            {
-
-                return false;
-            }
-        }
+       
 
         public static Window WaitForWindow(FlaUI.Core.AutomationBase automation, string windowName)
         {
@@ -239,23 +206,7 @@ namespace AutomationRezToInterV1
 
         }
 
-        public static void ClickSpecificFieldInList(AutomationElement logikProzor, int blockIndex, int clicks)
-        {
-            var allPanels = logikProzor.FindAllChildren(cf => cf.ByControlType(ControlType.Pane));
-            var targerParent = allPanels[3].FindAllChildren()[1];
-            var allBlocks = targerParent.FindAllChildren(cf => cf.ByControlType(ControlType.Pane));
-
-            if (blockIndex < allBlocks.Length)
-            {
-                var targetDoc = allBlocks[blockIndex].FindFirstDescendant(cf => cf.ByControlType(ControlType.Document));
-
-                if (targetDoc != null)
-                {
-                    targetDoc.Focus();
-                    PerformClicks(targetDoc, 4);
-                }
-            }
-        }
+       
 
         public static void PerformClicks(AutomationElement targerDoc, int numberOfDoubleClicks)
         {
@@ -354,17 +305,7 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-        private static Window GetDetailWindow(FlaUI.Core.AutomationBase automation)
-        {
-            var window = automation.GetDesktop().FindFirstDescendant(cf =>
-        cf.ByClassName("TReservationDetailForm").And(cf.ByName("Rezervacija")))?.AsWindow();
-
-            if (window == null)
-            {
-                Console.WriteLine("[DEBUG] Nisam našao prozor 'Rezervacija' (klasa TReservationDetailForm)");
-            }
-            return window;
-        }
+      
 
         public static bool UnbookReservation(FlaUI.Core.AutomationBase automation)
         {
@@ -410,85 +351,7 @@ namespace AutomationRezToInterV1
 
         }
 
-        public static void PressEnterToConfirm(FlaUI.Core.AutomationBase automation)
-        {
-            Console.WriteLine("[DEBUG] Čekam da se pojavi prozor za potvrdu...");
-
-            bool prozorPojavljen = false;
-            // Pokušaj da nađeš prozor 20 puta, sa pauzom od samo 50ms (ukupno 1 sekunda max čekanja)
-            for (int i = 0; i < 20; i++)
-            {
-                var prozori = automation.GetDesktop().FindAllChildren(cf => cf.ByControlType(ControlType.Window)); // #32770 je klasa za "standardni Windows dijalog"
-
-                foreach (var p in prozori)
-                {
-                    // Ako prozor postoji i nije glavni (Logik), to je naš popup
-                    if (p != null && !p.Name.Contains("Logik"))
-                    {
-                        Console.WriteLine($"[DEBUG] Pronađen popup: {p.Name}. Lupam Enter.");
-                        Keyboard.Press(VirtualKeyShort.ENTER);
-                        prozorPojavljen = true;
-                        break;
-                    }
-                }
-                if (prozorPojavljen) break;
-                RunControl.Sleep(100);
-
-
-                if (!prozorPojavljen)
-                {
-                    Console.WriteLine("[WARNING] Nisam detektovao prozor preko petlje, šaljem Enter naslepo.");
-                    Keyboard.Press(VirtualKeyShort.ENTER);
-                }
-
-            }
-
-            if (!prozorPojavljen)
-            {
-                Console.WriteLine("[WARNING] Nisam dočekao prozor za potvrdu, nastavljam dalje.");
-            }
-        }
-
-        public static bool CopyToInternalTransfer(FlaUI.Core.AutomationBase automation)
-        {
-            var desktop = automation.GetDesktop();
-
-            // uhvati prozor rezervacija 
-            var rezWidow = desktop.FindFirstDescendant(cf => cf.ByName("Rezervacija"))?.AsWindow();
-
-            if (rezWidow == null)
-            {
-                Console.WriteLine("[ERROR] Ne mogu da nadjem prozor 'Rezervacija' za kopianje");
-                return false;
-            }
-
-            // nadji dugme kopiraj 
-            var copyButton = rezWidow.FindFirstDescendant(cf => cf.ByName("Kopiraj"))?.AsButton();
-
-            if (copyButton != null)
-            {
-                copyButton.Invoke();
-                Console.WriteLine("[INFO] Kliknuto na dugme 'Kopiraj'.");
-                return true;
-            }
-
-            Console.WriteLine("[ERROR] Dugme 'Kopiraj' nije nadjeno.");
-            return false;
-        }
-
-        public static void ExecutePresses(params (VirtualKeyShort key, int count, int delay)[] steps)
-        {
-            foreach (var step in steps)
-            {
-                for (int i = 0; i < step.count; i++)
-                {
-                    Keyboard.Press(step.key);
-                    RunControl.Sleep(step.delay);
-
-
-                }
-            }
-        }
+                    
 
         public static void DeepSearch(AutomationElement element, int level)
         {
@@ -519,24 +382,7 @@ namespace AutomationRezToInterV1
             }
         }
 
-        public static void DumpWindowToFile(AutomationElement root, string fileName)
-        {
-            var sb = new StringBuilder();
-            int i = 0;
-            foreach (var el in root.FindAllDescendants())
-            {
-                string tip = "", ime = "", klasa = "", vrednost = "";
-                try { tip = el.ControlType.ToString(); } catch { }
-                try { ime = el.Name; } catch { }
-                try { klasa = el.ClassName; } catch { }
-                try { if (el.Patterns.Value.IsSupported) vrednost = el.Patterns.Value.Pattern.Value.Value; } catch { }
-                System.Drawing.Rectangle r = default;
-                try { r = el.BoundingRectangle; } catch { }
-                sb.AppendLine($"[{i++}] {tip} | Klasa: {klasa} | Ime: {ime} | Vrednost: | {vrednost} | Poz: {r.X},{r.Y}");
-            }
-            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, fileName), sb.ToString());
-
-        }
+       
 
         private delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
         [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
@@ -592,18 +438,7 @@ namespace AutomationRezToInterV1
                 .FirstOrDefault();
         }
 
-        public static void IzmeriPomerajDokumenti(Window logik, int staroX, int staroY)
-        {
-            IntPtr h = logik.Properties.NativeWindowHandle.Value;
-            GetWindowRect(h, out var wr);
-            var panel = NadjiDonjiLeviPanel(h);
-            if (panel == null) { Console.WriteLine("[TEST] Panel nije nađen."); return; }
-
-            int dx = (wr.Left + staroX) - panel.R.Left;
-            int dy = (wr.Top + staroY) - panel.R.Top;
-            Console.WriteLine($"[TEST] Prozor: {wr.Left},{wr.Top}  Panel: {panel.R.Left},{panel.R.Top} - {panel.R.Right},{panel.R.Bottom}");
-            Console.WriteLine($"[TEST] Pomeraj u odnosu na panel: X={dx}, Y={dy}");
-        }
+        
 
         public static bool KlikniDokumenti(Window logik, int dx = 70, int dy = 130)
         {
@@ -843,30 +678,7 @@ namespace AutomationRezToInterV1
             return true;
         }
 
-        public static void DumpOpenMenus(FlaUI.Core.AutomationBase automation, string fileName)
-        {
-            var sb = new StringBuilder();
-            var menus = automation.GetDesktop().FindAllChildren(cf =>
-                cf.ByControlType(ControlType.Menu).Or(cf.ByClassName("#32768")));
-            sb.AppendLine($"Otvorenih menija: {menus.Length}");
-
-            foreach (var m in menus)
-            {
-                sb.AppendLine("---- meni ----");
-                foreach (var item in m.FindAllDescendants())
-                {
-                    string ime = "", tip = ""; bool aktivno = false;
-                    try { ime = item.Name; } catch { }
-                    try { tip = item.ControlType.ToString(); } catch { }
-                    try { aktivno = item.IsEnabled; } catch { }
-                    sb.AppendLine($"{tip} | {ime} | aktivno: {aktivno}");
-                }
-            }
-
-            string putanja = Path.Combine(AppContext.BaseDirectory, fileName);
-            File.WriteAllText(putanja, sb.ToString());
-            System.Diagnostics.Process.Start("notepad.exe", putanja);
-        }
+      
 
         public static AutomationElement PostaviTipDokumenta(AutomationElement logikProzor, string zeljeniTip, int maxKlikova = 12)
         {
@@ -1144,25 +956,7 @@ namespace AutomationRezToInterV1
             return $"Tip: {tip} | Ime {name}";
         }
 
-        public static bool WaitForMenu(FlaUI.Core.AutomationBase automation, string menuName)
-        {
-            Console.WriteLine($"[INFO] Čekam da se meni '{menuName}' pojavi...");
-            var desktop = automation.GetDesktop();
-
-            // Čekamo do 2 sekunde, ali proveravamo svakih 50ms
-            for (int i = 0; i < 40; i++)
-            {
-                // Tražimo bilo koji element koji liči na meni ili novi prozor
-                var menu = desktop.FindFirstDescendant(cf => cf.ByName(menuName));
-                if (menu != null)
-                {
-                    Console.WriteLine($"[INFO] Meni '{menuName}' detektovan!");
-                    return true;
-                }
-                RunControl.Sleep(50);
-            }
-            return false;
-        }
+       
 
         public static void ClickAndMeasure(AutomationElement element, string buttonName)
         {
@@ -1220,90 +1014,7 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-        public static bool SelectAndConfirmExitWarehouse(FlaUI.Core.AutomationBase automation, string warehouseCode)
-        {
-            // uhvati prozor 
-            var desktop = automation.GetDesktop();
-            Window window = null;
-
-            for (int i = 0; i < 20; i++)
-            {
-                var sviProzori = automation.GetDesktop().FindAllChildren(cf => cf.ByControlType(ControlType.Window));
-                foreach (var p in sviProzori)
-                {
-                    if (p.Name.Contains("Magacini"))
-                    {
-                        Console.WriteLine($"[DEBUG] nasao sam prozor {p.Name}");
-                        window = p.AsWindow();
-                        break;
-                    }
-                }
-
-
-                // window = desktop.FindFirstDescendant(cf => cf.ByName("Magacini"))?.AsWindow();
-                if (window != null) break;
-                RunControl.Sleep(100);
-            }
-
-
-            if (window == null)
-            {
-                Console.WriteLine("[ERROR] nije nasao izlazni prozor Magacini");
-                return false;
-            }
-
-            RunControl.Sleep(300);
-
-            // pronadji edit polje 
-            var editFiled = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Edit));
-            if (editFiled.Length > 0)
-            {
-                var searchField = editFiled[0].AsTextBox();
-                searchField.Focus();
-                RunControl.Sleep(100);
-
-
-                // kucamo tekst
-                searchField.Text = warehouseCode;
-                RunControl.Sleep(200);
-
-
-
-
-
-                // pronadji dugme pretraga
-                var searchButton = window.FindFirstDescendant(cf => cf.ByName("Pretraga"))?.AsButton();
-                if (searchButton != null)
-                {
-                    searchButton.Click();
-                    RunControl.Sleep(800);
-                }
-
-
-            }
-            FlaUI.Core.AutomationElements.Button confirmationButton = null;
-
-            for (int i = 0; i < 20; i++)
-            {
-                // klikni u redu 
-                confirmationButton = window.FindFirstDescendant(cf => cf.ByName("U redu"))?.AsButton();
-
-                if (confirmationButton != null)
-                {
-                    confirmationButton.Click();
-                    Console.WriteLine($"[SUCCESS] Magacin '{warehouseCode} izabran i potvrdjen'");
-                    return true;
-                }
-
-                RunControl.Sleep(200);
-            }
-
-
-
-            Console.WriteLine("[ERROR] Našao je prozor, ukucao tekst, ali nije našao dugme 'U redu'");
-            return false;
-        }
-
+       
         public static bool IzaberiMagacinWin32(FlaUI.Core.AutomationBase automation, string sifra)
         {
             Window prozor = null;
@@ -1365,118 +1076,8 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-
-
-
-        public static void ClearAllWarnings(FlaUI.Core.AutomationBase automation)
-        {
-            // pokusavamo dandjemo upozorenja sve dok ih ima
-            var desktop = automation.GetDesktop();
-            var allWindows = desktop.FindAllChildren(cf => cf.ByControlType(FlaUI.Core.Definitions.ControlType.Window));
-
-            foreach (var window in allWindows)
-            {
-                // Tražimo prozor čije ime sadrži "Upozorenje"
-                if (window.Name != null && window.Name.Contains("Upozorenje"))
-                {
-                    Console.WriteLine($"[DEBUG] Pronađen prozor preko UIA2: {window.Name}");
-
-                    // 3. Traži dugme unutar tog prozora
-                    var okButton = window.FindFirstDescendant(cf => cf.ByName("U redu"))?.AsButton();
-                    if (okButton != null)
-                    {
-                        okButton.Click();
-                        Console.WriteLine("[INFO] Kliknuto 'U redu'");
-                        return; // Zatvorili smo ga, izlazimo
-                    }
-                }
-            }
-        }
-
-        public static void EnterReservationComment(FlaUI.Core.AutomationBase automation, UserInputConfig config)
-        {
-            var window = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName("Interni prenos"))?.AsWindow();
-            if (window == null)
-            {
-                Console.WriteLine("[ERROR] Ne mogu da nadjem interni prenos");
-                return;
-            }
-            else
-            {
-                Console.WriteLine("[SUCCESS] Fokusiran prozor interni prenos ");
-            }
-        }
-
-
-        public static void SelectTab(FlaUI.Core.AutomationBase automation, string tabName)
-        {
-            var tabItem = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName(tabName))?.AsTabItem();
-            if (tabItem != null)
-            {
-                tabItem.Click();
-                RunControl.Sleep(200); // Kratka pauza za renderovanje
-                Console.WriteLine($"[INFO] Tab '{tabName}' je selektovan.");
-            }
-        }
-
-        public static void FocusCommentWithTabs(FlaUI.Core.AutomationBase automation, int tabCount, UserInputConfig config)
-        {
-            var window = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName("Interni prenos"))?.AsWindow();
-            if (window == null) return;
-
-            window.Focus(); // Osiguraj da je prozor u fokusu
-            RunControl.Sleep(300);
-
-            // 1. Pritisni TAB onoliko puta koliko je potrebno
-            for (int i = 0; i < tabCount; i++)
-            {
-                Keyboard.Press(VirtualKeyShort.TAB);
-                RunControl.Sleep(100); // Kratka pauza između tabova
-            }
-
-            // 2. Sada je fokus verovatno na polju za komentar
-            // Pošto je fokus tu, možemo koristiti Keyboard.Type()
-            var commentBox = "";
-            // formiramo string
-            string fullComment = $"{config.Payment} {config.RezervationNumber}";
-
-            commentBox = fullComment;
-            Console.WriteLine($"[INFO] Unet komentar {fullComment}");
-
-            // 3. Pritisni ENTER da potvrdiš unos
-            Keyboard.Press(VirtualKeyShort.ENTER);
-            Console.WriteLine("[SUCCESS] Komentar unet preko TAB navigacije.");
-        }
-
-        public static void EnterReservationComment1(FlaUI.Core.AutomationBase automation, UserInputConfig config)
-        {
-            var window = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName("Interni prenos"))?.AsWindow();
-            if (window == null) return;
-
-            var allEdits = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Edit));
-            if (allEdits.Length > 0)
-            {
-                // Uzimamo prvo polje (ako je pogrešno, samo promeni indeks u [1])
-                var commentBox = allEdits[0].AsTextBox();
-                commentBox.Focus();
-                RunControl.Sleep(300);
-
-                // Formiramo string direktno iz config-a
-                string fullComment = $"{config.Payment} {config.RezervationNumber}";
-
-                // Čistimo i kucamo
-                commentBox.Text = string.Empty;
-
-                RunControl.TypeText(fullComment);
-
-                // Enter da "zalepi" tekst u Logik
-                Keyboard.Press(VirtualKeyShort.ENTER);
-                RunControl.Sleep(500);
-
-                Console.WriteLine($"[SUCCESS] Upisan komentar: {fullComment}");
-            }
-        }
-
+                         
+       
         public static bool TryClickDialog(FlaUI.Core.AutomationBase automation, string dialogName, string buttonName, int maxRetries = 10)
         {
             Console.WriteLine($"[INFO] Pokušavam da nađem dijalog: {dialogName}...");
@@ -1522,133 +1123,8 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-        public static void PerformTabSequenceAndInput(FlaUI.Core.AutomationBase automation, UserInputConfig config)
-        {
-            // 1. Fokusiraj prozor "Interni prenos"
-            var window = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName("Interni prenos"))?.AsWindow();
-
-            if (window != null)
-            {
-                window.Focus();
-                RunControl.Sleep(500); // Sačekaj da prozor stvarno dobije fokus
-
-                // 2. Simuliraj 5 pritisaka tastera TAB
-                for (int i = 0; i < 4; i++)
-                {
-                    FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
-                    RunControl.Sleep(200); // Mala pauza između tabova da aplikacija stigne da odreaguje
-                    Console.WriteLine($"[INFO] Pritisnut TAB {i + 1}");
-                }
-                string input = $"{config.Payment} {config.RezervationNumber}";
-
-                // 3. Unesi vrednost
-                RunControl.TypeText(input);
-                RunControl.Sleep(200);
-                FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-                window.Focus();
-
-                // Da potvrdiš unos
-
-                Console.WriteLine($"[SUCCESS] Unesena vrednost: {input}");
-            }
-        }
-        public static void MoveAndConfirm(int tabCount)
-        {
-            Console.WriteLine($"[INFO] Radim sekvencu: {tabCount} TAB-ova i ENTER.");
-
-            // 1. Pomeranje tabovima
-            for (int i = 0; i < tabCount; i++)
-            {
-                FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
-                RunControl.Sleep(150); // Možemo malo smanjiti pauzu ako je mašina brza
-            }
-
-            // 2. Potvrda
-            // FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-
-            Console.WriteLine("[SUCCESS] Sekvenca završena.");
-        }
-
-        public static void MouseClickAndSelect(AutomationElement element)
-        {
-            // 1. Dobijamo tačne koordinate tog elementa na ekranu
-            var point = element.GetClickablePoint();
-
-            // 2. Pomeramo miša na te koordinate (ovo ga dovodi do polja)
-            Mouse.MoveTo(point);
-            RunControl.Sleep(50); // Kratka pauza da miš stigne
-
-            // 3. Klikćemo
-            Mouse.Click(point);
-            RunControl.Sleep(50);
-
-            // 4. Sada šaljemo tastere (pošto je miš sad sigurno tamo gde treba)
-            Keyboard.Press(VirtualKeyShort.DOWN);
-            RunControl.Sleep(50);
-            Keyboard.Press(VirtualKeyShort.ENTER);
-        }
-
-        public static void FastClickFocusedElement(AutomationElement element)
-        {
-            // 1. Dobijamo tačnu koordinatu elementa koji je u fokusu
-            var point = element.GetClickablePoint();
-
-            // 2. Klikćemo direktno tu (nema pomeranja miša, nema pretrage)
-            // Smanjili smo Sleep na apsolutni minimum od 20ms
-            Mouse.Click(point);
-            RunControl.Sleep(20);
-
-            Console.WriteLine("[INFO] Brzi klik na element obavljen.");
-        }
-        public static void FastSpaceDownEnter()
-        {
-            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-
-            // OBAVEZNO čekamo pola sekunde da UI stigne da iscrta taj novi mali meni na ekranu
-            RunControl.Sleep(500);
-
-            // 2. Strelica dole (da pređemo na prvu opciju u tom podmeniju)
-            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.DOWN);
-            RunControl.Sleep(500);
-
-            // 3. Enter (da potvrdimo izbor te opcije i zatvorimo podmeni)
-            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-            RunControl.Sleep(500);
-
-            Console.WriteLine("[INFO] Podmeni uspesno otvoren, prva opcija izabrana.");
-        }
-
-        public static void PametniKlikNaFokusiranoDugme(FlaUI.Core.AutomationBase automation)
-        {
-            // 1. Pitamo Windows: "Šta je trenutno markirano (fokusirano) na ekranu?"
-            var trenutnoFokusirano = automation.FocusedElement();
-
-            if (trenutnoFokusirano != null)
-            {
-                // 2. Uzimamo tačne x, y koordinate tog dugmeta
-                var tackaZaKlik = trenutnoFokusirano.GetClickablePoint();
-
-                // 3. Dajemo komandu mišu da klikne tačno tu
-                FlaUI.Core.Input.Mouse.Click(tackaZaKlik);
-                Console.WriteLine("[INFO] Miš je uspešno kliknuo na fokusirano dugme.");
-
-                // Čekamo malo da se taj podmeni pojavi na ekranu
-                RunControl.Sleep(500);
-
-                // 4. Kad se meni otvorio od klika, strelicom dole biramo prvu opciju
-                FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.DOWN);
-                RunControl.Sleep(500);
-
-                // 5. Potvrđujemo enterom
-                FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-                Console.WriteLine("[INFO] Opcija iz podmenija je izabrana.");
-            }
-            else
-            {
-                Console.WriteLine("[GRESKA] Windows ne vidi šta je fokusirano!");
-            }
-        }
-
+                             
+                
         public static bool OtvoriDokumentiPrecicom(Window logik)
         {
             IntPtr h = logik.Properties.NativeWindowHandle.Value;
@@ -1658,57 +1134,7 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[INFO] Poslat Ctrl+F5 (Dokumenti)");
             return true;
         }
-
-        public static void RazdvojiRezervacijuBrzo()
-        {
-            Console.WriteLine("[INFO] Čekam da iskoči mali prozor...");
-            RunControl.Sleep(500); // Dajemo mu pola sekunde da se pojavi na ekranu
-
-            // Šaljemo TAB koji si otkrio da radi posao
-            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
-            RunControl.Sleep(200);
-
-            // Šaljemo ENTER da potvrdimo akciju na tom dugmetu
-            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-
-            Console.WriteLine("[SUCCESS] Akcija 'Razdvoji rezervaciju' uspešno izvršena tastaturom!");
-        }
-
-        /*
-        public static void ProknjiziInterniPrenos(FlaUI.Core.AutomationBase automation)
-        {
-            Console.WriteLine("[INFO] Čekam da se otvori glavni prozor 'Interni prenos'...");
-
-            // Koristimo tvoju postojeću metodu za traženje prozora
-            var interniPrenosProzor = FindWindow(automation, "Interni prenos");
-
-            if (interniPrenosProzor != null)
-            {
-                Console.WriteLine("[SUCCESS] Prozor 'Interni prenos' je pronađen!");
-
-                // Tražimo dugme 'Proknjiži' (FlaUI će ga lako naći jer ima tačno ime)
-                var proknjiziDugme = interniPrenosProzor.FindFirstDescendant(cf =>
-                    cf.ByName("Proknjiži").And(cf.ByControlType(FlaUI.Core.Definitions.ControlType.Button)))?.AsButton();
-
-                if (proknjiziDugme != null)
-                {
-                    // Uzimamo x,y koordinate dugmeta na ekranu
-                    var point = proknjiziDugme.GetClickablePoint();
-
-                    // Naređujemo pravom mišu da klikne tamo (brzina svetlosti)
-                    FlaUI.Core.Input.Mouse.Click(point);
-                }
-                else
-                {
-                    Console.WriteLine("[GRESKA] Prozor je otvoren, ali ne vidim dugme 'Proknjiži'.");
-                }
-            }
-            else
-            {
-                Console.WriteLine("[GRESKA] Prozor 'Interni prenos' se nije otvorio nakon duplog klika.");
-            }
-        }
-        */
+       
 
         public static bool ProknjiziInterniPrenos(FlaUI.Core.AutomationBase automation)
         {
@@ -1731,55 +1157,7 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[SUCCESS] Kliknuto 'Proknjiži'");
             return true;
         }
-
-        public static void DupliKlikNaFokusiraniRed(FlaUI.Core.AutomationBase automation)
-        {
-            Console.WriteLine("[INFO] Pripremam se za dupli klik na grid...");
-
-            // Tražimo gde se trenutno nalazi fokus (plavi red u Logiku)
-            var trenutniRed = automation.FocusedElement();
-
-            if (trenutniRed != null)
-            {
-                try
-                {
-                    if (trenutniRed.Patterns.ScrollItem.IsSupported)
-                    {
-                        trenutniRed.Patterns.ScrollItem.Pattern.ScrollIntoView();
-                        RunControl.Sleep(50); // Kratka pauza da se UI osveži nakon skrola
-                    }
-
-                    // UZIMAMO PRAVOUGAONIK FOKUSIRANOG REDA
-                    var rect = trenutniRed.BoundingRectangle;
-
-                    // Računamo sigurnu tačku unutar tog reda. 
-                    // rect.Left + 50 pomera miša 50 piksela udesno (izbegavamo margine)
-                    // rect.Top + (rect.Height / 2) gađa tačno vertikalnu sredinu reda!
-                    int x = (int)rect.Left + 50;
-                    int y = (int)rect.Top + ((int)rect.Height / 2);
-
-                    var tackaZaKlik = new System.Drawing.Point(x, y);
-
-                    // Pomeramo miša fizički na tu tačku i radimo dvoklik
-                    FlaUI.Core.Input.Mouse.Position = tackaZaKlik;
-                    RunControl.Sleep(100); // Kratka pauza da se miš "smiri" na novoj lokaciji
-
-                    FlaUI.Core.Input.Mouse.DoubleClick(FlaUI.Core.Input.MouseButton.Left);
-                    Console.WriteLine($"[SUCCESS] Poslat doubleClick tačno na koordinate ({x}, {y}) reda!");
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    // BEKAP PLAN: Ako i pored skrola prijavi grešku, šaljemo ENTER!
-                    Console.WriteLine($"[UPOZORENJE] Greška pri kliku na red: {ex.Message}. Šaljem ENTER kao zamenu...");
-                    FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-                }
-            }
-            else
-            {
-                Console.WriteLine("[UPOZORENJE] Windows ne vidi fokusirani red. Pokušavam alternativu sa ENTER tasterom...");
-                FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-            }
-        }
+                
 
         public static void ZatvoriInterniPrenosUredu(FlaUI.Core.AutomationBase automation)
         {
@@ -1911,11 +1289,6 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[ERROR] Rezervacija se nije zatvorila (možda je iskočio neki dijalog).");
             return false;
         }
-
-
-
-
-
 
     }
 }
