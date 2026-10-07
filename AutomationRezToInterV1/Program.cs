@@ -131,7 +131,7 @@ namespace AutomationRezToInterV1
             // 3. Startujemo aplikaciju
 
 
-           
+
 
             Application app = AutomationHelpers.StartAnApplication(pathToExeFile);
 
@@ -165,10 +165,12 @@ namespace AutomationRezToInterV1
                         AutomationHelpers.MaximizeWindow(targetWindow);
                     });
 
-                    AutomationHelpers.StopWatchSteps("Dokumenti (Ctrl+F5)", () => {
+                    AutomationHelpers.StopWatchSteps("Dokumenti (Ctrl+F5)", () =>
+                    {
                         AutomationHelpers.OtvoriDokumentiPrecicom(targetWindow);
                     });
-                    AutomationHelpers.StopWatchSteps("Cekanje prozora Prijava", () => {
+                    AutomationHelpers.StopWatchSteps("Cekanje prozora Prijava", () =>
+                    {
                         loginWindow = AutomationHelpers.WaitForWindow(automation, "Prijava");
                     });
 
@@ -190,7 +192,8 @@ namespace AutomationRezToInterV1
                         });
 
                         // loogovanje naa prozor prijava 
-                        AutomationHelpers.StopWatchSteps("Prijava", () => {
+                        AutomationHelpers.StopWatchSteps("Prijava", () =>
+                        {
                             AutomationHelpers.PerformLogicLogin(loginWindow, config);
                         });
                         //AutomationHelpers.PerformLogicLogin(loginWindow, config);
@@ -213,7 +216,8 @@ namespace AutomationRezToInterV1
                             */
 
                             FlaUI.Core.AutomationElements.AutomationElement myDocument = null;
-                            AutomationHelpers.StopWatchSteps("Postavi tip Rezervacija", () => {
+                            AutomationHelpers.StopWatchSteps("Postavi tip Rezervacija", () =>
+                            {
                                 myDocument = AutomationHelpers.PostaviTipDokumenta(logikProzor, "Rezervacija");
                             });
                             if (myDocument == null)
@@ -228,7 +232,8 @@ namespace AutomationRezToInterV1
                             if (myDocument != null)
                             {
                                 // unos broja rezervacije
-                                AutomationHelpers.StopWatchSteps("Enter reservation number", () => {
+                                AutomationHelpers.StopWatchSteps("Enter reservation number", () =>
+                                {
                                     AutomationHelpers.EnterReservationNumber(logikProzor, myDocument, config);
                                 });
 
@@ -236,7 +241,8 @@ namespace AutomationRezToInterV1
                                 RunControl.Sleep(300);
 
                                 // dvoklik na prvu rezervaciju 
-                                AutomationHelpers.StopWatchSteps("Select first in grid", () => {
+                                AutomationHelpers.StopWatchSteps("Select first in grid", () =>
+                                {
                                     AutomationHelpers.SelectFirstInGridWithoutSearch(logikProzor);
                                 });
 
@@ -249,7 +255,8 @@ namespace AutomationRezToInterV1
 
                                 // otknizavanje 
                                 bool success = false;
-                                AutomationHelpers.StopWatchSteps("Otknjizvanje rezervacije ", () => {
+                                AutomationHelpers.StopWatchSteps("Otknjizvanje rezervacije ", () =>
+                                {
                                     success = AutomationHelpers.UnbookReservation(automation);
                                 });
 
@@ -272,12 +279,14 @@ namespace AutomationRezToInterV1
                                     return;
                                 }
 
-                                AutomationHelpers.StopWatchSteps("Klik na Kopiraj", () => {
+                                AutomationHelpers.StopWatchSteps("Klik na Kopiraj", () =>
+                                {
                                     AutomationHelpers.ClickAndMeasure(rezWindow, "Kopiraj");
                                 });
 
                                 bool kopiranoOk = false;
-                                AutomationHelpers.StopWatchSteps("Izaberi 'U interni prenos'", () => {
+                                AutomationHelpers.StopWatchSteps("Izaberi 'U interni prenos'", () =>
+                                {
                                     kopiranoOk = AutomationHelpers.IzaberiStavkuMenija(automation, "U interni prenos");
                                 });
                                 if (!kopiranoOk)
@@ -288,7 +297,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 bool noPressed = false;
-                                AutomationHelpers.StopWatchSteps("Ne uzimaj cene iz magacina", () => {
+                                AutomationHelpers.StopWatchSteps("Ne uzimaj cene iz magacina", () =>
+                                {
                                     noPressed = AutomationHelpers.ClickButtonOnDialog(automation, "Potvrda", "Ne");
                                 });
 
@@ -302,7 +312,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 bool warningHandled = false;
-                                AutomationHelpers.StopWatchSteps("Upozorenje za ulazni magacin", () => {
+                                AutomationHelpers.StopWatchSteps("Upozorenje za ulazni magacin", () =>
+                                {
 
 
                                     warningHandled = AutomationHelpers.TryClickDialog(automation, "Upozorenje", "U redu");
@@ -319,7 +330,8 @@ namespace AutomationRezToInterV1
 
                                 // automatizaij za magacine 
                                 bool warehouseHandled = false;
-                                AutomationHelpers.StopWatchSteps("Prvi magacin", () => {
+                                AutomationHelpers.StopWatchSteps("Prvi magacin", () =>
+                                {
                                     warehouseHandled = AutomationHelpers.ClickButtonOnDialog(automation, "Magacini", "U redu");
                                 });
 
@@ -335,7 +347,8 @@ namespace AutomationRezToInterV1
                                 // upozeorenje za izlazni magacin
 
                                 bool warningHandledExitWarehouse = false;
-                                AutomationHelpers.StopWatchSteps("Izlazni magacin ", () => {
+                                AutomationHelpers.StopWatchSteps("Izlazni magacin ", () =>
+                                {
                                     warningHandledExitWarehouse = AutomationHelpers.TryClickDialog(automation, "Upozorenje", "U redu");
                                 });
 
@@ -351,7 +364,8 @@ namespace AutomationRezToInterV1
 
                                 // AutomationHelpers.DeepSearch(automation.GetDesktop(), 0);
                                 bool warehouseExitSelected = false;
-                                AutomationHelpers.StopWatchSteps("mp magacin", () => {
+                                AutomationHelpers.StopWatchSteps("mp magacin", () =>
+                                {
                                     warehouseExitSelected = AutomationHelpers.IzaberiMagacinWin32(automation, "MP");
                                 });
 
@@ -366,7 +380,8 @@ namespace AutomationRezToInterV1
                                 Console.WriteLine("[SUCCESS] Magacin MP je selektovan");
 
                                 string prviProzor = null;
-                                AutomationHelpers.StopWatchSteps("Upozorenje o količini / Obaveštenje", () => {
+                                AutomationHelpers.StopWatchSteps("Upozorenje o količini / Obaveštenje", () =>
+                                {
                                     prviProzor = AutomationHelpers.CekajPrviOdProzora(automation, new[] { "Upozorenje", "Obaveštenje" });
                                 });
 
@@ -377,7 +392,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 bool infoAboutCreatingInternal = false;
-                                AutomationHelpers.StopWatchSteps("Kreiranje internog naloga", () => {
+                                AutomationHelpers.StopWatchSteps("Kreiranje internog naloga", () =>
+                                {
                                     infoAboutCreatingInternal = AutomationHelpers.TryClickDialog(automation, "Obaveštenje", "U redu", 30);
                                 });
                                 if (!infoAboutCreatingInternal)
@@ -391,7 +407,8 @@ namespace AutomationRezToInterV1
 
                                 //AutomationHelpers.EnterReservationComment(automation, config);
                                 bool ipOtvoren = false;
-                                AutomationHelpers.StopWatchSteps("Cekam na interni prenos", () => {
+                                AutomationHelpers.StopWatchSteps("Cekam na interni prenos", () =>
+                                {
                                     ipOtvoren = AutomationHelpers.WaitForAndProcessInterniPrenos(automation);
                                 });
                                 if (!ipOtvoren)
@@ -403,7 +420,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 bool magacinOk = false;
-                                AutomationHelpers.StopWatchSteps("Provera magacina", () => {
+                                AutomationHelpers.StopWatchSteps("Provera magacina", () =>
+                                {
                                     magacinOk = AutomationHelpers.ProveriMagacinInternogPrenosa(automation, "MP");
                                 });
                                 if (!magacinOk)
@@ -415,7 +433,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 bool komentarOk = false;
-                                AutomationHelpers.StopWatchSteps("Upis komentara", () => {
+                                AutomationHelpers.StopWatchSteps("Upis komentara", () =>
+                                {
                                     komentarOk = AutomationHelpers.UnesiKomentarInterniPrenos(automation, $"{config.Payment} {config.RezervationNumber}");
                                 });
                                 if (!komentarOk)
@@ -429,12 +448,14 @@ namespace AutomationRezToInterV1
                                 bool povezaniOk = ipProzor != null;
 
                                 if (povezaniOk)
-                                    AutomationHelpers.StopWatchSteps("Klik na Povezani dok.", () => {
+                                    AutomationHelpers.StopWatchSteps("Klik na Povezani dok.", () =>
+                                    {
                                         povezaniOk = AutomationHelpers.KlikniDugmeWin32(ipProzor, "Povezani dok.");
                                     });
 
                                 if (povezaniOk)
-                                    AutomationHelpers.StopWatchSteps("Izaberi 'Rezervacija'", () => {
+                                    AutomationHelpers.StopWatchSteps("Izaberi 'Rezervacija'", () =>
+                                    {
                                         povezaniOk = AutomationHelpers.IzaberiStavkuMenija(automation, "Rezervacija");
                                     });
 
@@ -451,7 +472,8 @@ namespace AutomationRezToInterV1
                                 */
 
                                 bool razdvojenoOk = false;
-                                AutomationHelpers.StopWatchSteps("Razdvoji rezervaciju", () => {
+                                AutomationHelpers.StopWatchSteps("Razdvoji rezervaciju", () =>
+                                {
                                     razdvojenoOk = AutomationHelpers.RazdvojiRezervaciju(automation, config);
                                 });
                                 if (!razdvojenoOk)
@@ -472,7 +494,8 @@ namespace AutomationRezToInterV1
                                 Console.WriteLine("[INFO] Šaljem ENTER da otvorim Interni prenos...");
 
                                 bool gridOk = false;
-                                AutomationHelpers.StopWatchSteps("Dvoklik na grid dokumenata", () => {
+                                AutomationHelpers.StopWatchSteps("Dvoklik na grid dokumenata", () =>
+                                {
                                     gridOk = AutomationHelpers.DupliKlikNaGridDokumenata(logikProzor);
                                 });
                                 if (!gridOk)
@@ -524,7 +547,8 @@ namespace AutomationRezToInterV1
 
                                 // 5. Sada konačno tražimo dugme i klikćemo Proknjiži
                                 bool proknjiziKlik = false;
-                                AutomationHelpers.StopWatchSteps("Proknjiži interni prenos", () => {
+                                AutomationHelpers.StopWatchSteps("Proknjiži interni prenos", () =>
+                                {
                                     proknjiziKlik = AutomationHelpers.ProknjiziInterniPrenos(automation);
                                 });
                                 if (!proknjiziKlik)
@@ -535,7 +559,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 bool yesPressed = false;
-                                AutomationHelpers.StopWatchSteps("Potvrda knjiženja", () => {
+                                AutomationHelpers.StopWatchSteps("Potvrda knjiženja", () =>
+                                {
                                     yesPressed = AutomationHelpers.TryClickDialog(automation, "Potvrda", "Da", 10);
                                 });
                                 if (!yesPressed)
@@ -558,7 +583,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 // 9. ZAVRŠNI KLIK - Zatvaramo Interni prenos!
-                                AutomationHelpers.StopWatchSteps("Zatvori interni prenos ", () => {
+                                AutomationHelpers.StopWatchSteps("Zatvori interni prenos ", () =>
+                                {
                                     AutomationHelpers.ZatvoriInterniPrenosUredu(automation);
                                 });
 
@@ -569,7 +595,8 @@ namespace AutomationRezToInterV1
                                 RunControl.Sleep(200);
 
                                 bool pronadjiOk = false;
-                                AutomationHelpers.StopWatchSteps("Klik na Pronađi", () => {
+                                AutomationHelpers.StopWatchSteps("Klik na Pronađi", () =>
+                                {
                                     pronadjiOk = AutomationHelpers.KlikniDugmeWin32(logikProzor, "Pronađi", "TInvoiceNavigatorForm");
                                 });
                                 if (!pronadjiOk)
@@ -580,7 +607,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 RunControl.Sleep(700);   // da se lista osveži
-                                AutomationHelpers.StopWatchSteps("Ponovo otvori rezervaciju", () => {
+                                AutomationHelpers.StopWatchSteps("Ponovo otvori rezervaciju", () =>
+                                {
                                     AutomationHelpers.SelectFirstInGridWithoutSearch(logikProzor);
                                 });
 
@@ -603,7 +631,8 @@ namespace AutomationRezToInterV1
                                 }
 
                                 bool zatvorenoOk = false;
-                                AutomationHelpers.StopWatchSteps("Zatvori rezervaciju", () => {
+                                AutomationHelpers.StopWatchSteps("Zatvori rezervaciju", () =>
+                                {
                                     zatvorenoOk = AutomationHelpers.ZatvoriRezervaciju(automation, "U redu");
                                 });
                                 if (!zatvorenoOk)

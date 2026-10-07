@@ -18,7 +18,7 @@ namespace AutomationRezToInterV1
 {
     public class AutomationHelpers
     {
-      
+
         public static Application StartAnApplication(string path)
         {
             var app = Application.Launch(path);
@@ -200,7 +200,7 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[INFO] kliknuto Uredu");
 
         }
-               
+
 
         public static AutomationElement GetSpecificDocument(AutomationElement logikProzor, int blockIndex)
         {
@@ -333,7 +333,7 @@ namespace AutomationRezToInterV1
 
 
         }
-             
+
 
 
 
@@ -625,7 +625,7 @@ namespace AutomationRezToInterV1
                 return false;
 
             // PRIVREMENO: snimamo šta iskoči posle slanja
-           
+
             Console.WriteLine("[SUCCESS] Poslato na kasu.");
             return true;
         }
@@ -683,7 +683,7 @@ namespace AutomationRezToInterV1
             }
             return null;
         }
-        
+
 
         public static void IspisiProzoreProcesa(FlaUI.Core.AutomationBase automation, int processId)
         {
@@ -834,7 +834,7 @@ namespace AutomationRezToInterV1
             return KlikniDugmeWin32(mali, "Razdvoji rezervaciju");
         }
 
-       
+
 
         public static bool ProveriKomentarInternogPrenosa(FlaUI.Core.AutomationBase automation, string ocekivaniKomentar)
         {
@@ -871,7 +871,7 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-       
+
 
 
 
@@ -999,11 +999,11 @@ namespace AutomationRezToInterV1
         {
             Console.WriteLine($"[INFO] Pokušavam da nađem dijalog: {dialogName}...");
 
-          
-            
+
+
             for (int i = 0; i < maxRetries; i++)
             {
-                
+
                 var dialog = FindWindow(automation, dialogName);
 
                 if (dialog != null && !dialog.IsOffscreen)
@@ -1016,7 +1016,7 @@ namespace AutomationRezToInterV1
                         return true;
                     }
                 }
-                RunControl.Sleep(100); 
+                RunControl.Sleep(100);
             }
 
             Console.WriteLine($"[INFO] Dijalog '{dialogName}' se nije pojavio, idem dalje.");
@@ -1206,11 +1206,11 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-    
 
-    #region Debug alati (dump prozora i menija)
 
-      public static void DumpWindowToFile(AutomationElement root, string fileName)
+        #region Debug alati (dump prozora i menija)
+
+        public static void DumpWindowToFile(AutomationElement root, string fileName)
         {
             var sb = new StringBuilder();
             int i = 0;
