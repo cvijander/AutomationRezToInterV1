@@ -3,17 +3,12 @@ using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
-using FlaUI.UIA2;
-using System;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static AutomationRezToInterV1.UserInputConfig;
-using System.Text.Json;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using static AutomationRezToInterV1.UserInputConfig;
 
 
 
@@ -23,7 +18,7 @@ namespace AutomationRezToInterV1
 {
     public class AutomationHelpers
     {
-        private const int UIRefreshDelay = 150;
+      
         public static Application StartAnApplication(string path)
         {
             var app = Application.Launch(path);
@@ -105,7 +100,7 @@ namespace AutomationRezToInterV1
             return true;
         }
 
-      
+
 
 
         [DllImport("user32.dll")]
@@ -158,7 +153,7 @@ namespace AutomationRezToInterV1
             }
         }
 
-       
+
 
         public static Window WaitForWindow(FlaUI.Core.AutomationBase automation, string windowName)
         {
@@ -205,19 +200,7 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[INFO] kliknuto Uredu");
 
         }
-
-       
-
-        public static void PerformClicks(AutomationElement targerDoc, int numberOfDoubleClicks)
-        {
-            targerDoc.Focus();
-            for (int i = 0; i < numberOfDoubleClicks; i++)
-            {
-                Mouse.DoubleClick(targerDoc.GetClickablePoint());
-                RunControl.Sleep(300);
-            }
-
-        }
+               
 
         public static AutomationElement GetSpecificDocument(AutomationElement logikProzor, int blockIndex)
         {
@@ -305,7 +288,7 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-      
+
 
         public static bool UnbookReservation(FlaUI.Core.AutomationBase automation)
         {
@@ -350,39 +333,9 @@ namespace AutomationRezToInterV1
 
 
         }
+             
 
-                    
 
-        public static void DeepSearch(AutomationElement element, int level)
-        {
-            AutomationElement[] children;
-
-            try
-            {
-                children = element.FindAllChildren();
-            }
-            catch
-            {
-                return;
-            }
-
-            foreach (var child in children)
-            {
-                string distance = new string(' ', level * 2);
-                string info = GetSafeInfo(child);
-                Console.WriteLine($"{distance}{info}");
-
-                try
-                {
-                    child.DrawHighlight(System.Drawing.Color.Yellow);
-                }
-                catch { }
-
-                DeepSearch(child, level + 1);
-            }
-        }
-
-       
 
         private delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
         [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
@@ -438,9 +391,9 @@ namespace AutomationRezToInterV1
                 .FirstOrDefault();
         }
 
-        
 
-        public static bool KlikniDokumenti(Window logik, int dx = 70, int dy = 130)
+
+        public static bool KlikniDokumenti(Window logik, int dx = 70, int dy = 140)
         {
             IntPtr h = logik.Properties.NativeWindowHandle.Value;
             var panel = NadjiDonjiLeviPanel(h);
@@ -672,13 +625,12 @@ namespace AutomationRezToInterV1
                 return false;
 
             // PRIVREMENO: snimamo šta iskoči posle slanja
-            RunControl.Sleep(1000);
-            DumpForegroundWindow("kasa_prozor.txt");
-            Console.WriteLine("[INFO] Poslato na kasu. Ostatak za sada ručno.");
+           
+            Console.WriteLine("[SUCCESS] Poslato na kasu.");
             return true;
         }
 
-      
+
 
         public static AutomationElement PostaviTipDokumenta(AutomationElement logikProzor, string zeljeniTip, int maxKlikova = 12)
         {
@@ -731,26 +683,7 @@ namespace AutomationRezToInterV1
             }
             return null;
         }
-        public static void DumpWin32ToFile(IntPtr root, string fileName, bool otvoriNotepad = true)
-        {
-            var sb = new StringBuilder();
-            int i = 0;
-            EnumChildWindows(root, (h, _) =>
-            {
-                var cls = new StringBuilder(256);
-                GetClassName(h, cls, 256);
-                var txt = new StringBuilder(1024);
-                SendMessage(h, WM_GETTEXT, (IntPtr)1024, txt);
-                GetWindowRect(h, out var r);
-                sb.AppendLine($"[{i++}] {cls} | Tekst: {txt} | Poz: {r.Left},{r.Top}");
-                return true;
-            }, IntPtr.Zero);
-
-            string putanja = Path.Combine(AppContext.BaseDirectory, fileName);
-            File.WriteAllText(putanja, sb.ToString());
-            if (otvoriNotepad) System.Diagnostics.Process.Start("notepad.exe", putanja);
-
-        }
+        
 
         public static void IspisiProzoreProcesa(FlaUI.Core.AutomationBase automation, int processId)
         {
@@ -901,14 +834,7 @@ namespace AutomationRezToInterV1
             return KlikniDugmeWin32(mali, "Razdvoji rezervaciju");
         }
 
-        public static void DumpForegroundWindow(string fileName)
-        {
-            IntPtr h = GetForegroundWindow();
-            var naslov = new StringBuilder(256);
-            GetWindowText(h, naslov, 256);
-            Console.WriteLine($"[DEBUG] Aktivni prozor: '{naslov}'");
-            DumpWin32ToFile(h, fileName, otvoriNotepad: false);
-        }
+       
 
         public static bool ProveriKomentarInternogPrenosa(FlaUI.Core.AutomationBase automation, string ocekivaniKomentar)
         {
@@ -945,18 +871,9 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-        private static string GetSafeInfo(AutomationElement el)
-        {
-            string tip = "Nepoznat";
-            try { tip = el.ControlType.ToString(); } catch { tip = "Grip/Poseban"; }
-
-            string name = "N/A";
-            try { name = el.Name; } catch { }
-
-            return $"Tip: {tip} | Ime {name}";
-        }
-
        
+
+
 
         public static void ClickAndMeasure(AutomationElement element, string buttonName)
         {
@@ -1014,7 +931,7 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-       
+
         public static bool IzaberiMagacinWin32(FlaUI.Core.AutomationBase automation, string sifra)
         {
             Window prozor = null;
@@ -1076,18 +993,17 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-                         
-       
+
+
         public static bool TryClickDialog(FlaUI.Core.AutomationBase automation, string dialogName, string buttonName, int maxRetries = 10)
         {
             Console.WriteLine($"[INFO] Pokušavam da nađem dijalog: {dialogName}...");
 
-            // Vrtimo petlju 20 puta, ali sa pauzom od samo 50 milisekundi
-            // 20 puta po 50ms = tačno 1 sekunda maksimalnog čekanja ako dijalog kasni
+          
+            
             for (int i = 0; i < maxRetries; i++)
             {
-                // Ako dijalog ne postoji, želimo da proveri brzo i da odmah ide dalje ako ga nema
-                // var dialog = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName(dialogName))?.AsWindow();
+                
                 var dialog = FindWindow(automation, dialogName);
 
                 if (dialog != null && !dialog.IsOffscreen)
@@ -1100,7 +1016,7 @@ namespace AutomationRezToInterV1
                         return true;
                     }
                 }
-                RunControl.Sleep(100); // Proveravamo na svakih 50ms (ultra brzo, a efikasno)
+                RunControl.Sleep(100); 
             }
 
             Console.WriteLine($"[INFO] Dijalog '{dialogName}' se nije pojavio, idem dalje.");
@@ -1123,8 +1039,8 @@ namespace AutomationRezToInterV1
             return false;
         }
 
-                             
-                
+
+
         public static bool OtvoriDokumentiPrecicom(Window logik)
         {
             IntPtr h = logik.Properties.NativeWindowHandle.Value;
@@ -1134,7 +1050,7 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[INFO] Poslat Ctrl+F5 (Dokumenti)");
             return true;
         }
-       
+
 
         public static bool ProknjiziInterniPrenos(FlaUI.Core.AutomationBase automation)
         {
@@ -1157,7 +1073,7 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[SUCCESS] Kliknuto 'Proknjiži'");
             return true;
         }
-                
+
 
         public static void ZatvoriInterniPrenosUredu(FlaUI.Core.AutomationBase automation)
         {
@@ -1290,5 +1206,139 @@ namespace AutomationRezToInterV1
             return false;
         }
 
+    
+
+    #region Debug alati (dump prozora i menija)
+
+      public static void DumpWindowToFile(AutomationElement root, string fileName)
+        {
+            var sb = new StringBuilder();
+            int i = 0;
+            foreach (var el in root.FindAllDescendants())
+            {
+                string tip = "", ime = "", klasa = "", vrednost = "";
+                try { tip = el.ControlType.ToString(); } catch { }
+                try { ime = el.Name; } catch { }
+                try { klasa = el.ClassName; } catch { }
+                try { if (el.Patterns.Value.IsSupported) vrednost = el.Patterns.Value.Pattern.Value.Value; } catch { }
+                System.Drawing.Rectangle r = default;
+                try { r = el.BoundingRectangle; } catch { }
+                sb.AppendLine($"[{i++}] {tip} | Klasa: {klasa} | Ime: {ime} | Vrednost: | {vrednost} | Poz: {r.X},{r.Y}");
+            }
+            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, fileName), sb.ToString());
+
+        }
+
+        public static void DumpOpenMenus(FlaUI.Core.AutomationBase automation, string fileName)
+        {
+            var sb = new StringBuilder();
+            var menus = automation.GetDesktop().FindAllChildren(cf =>
+                cf.ByControlType(ControlType.Menu).Or(cf.ByClassName("#32768")));
+            sb.AppendLine($"Otvorenih menija: {menus.Length}");
+
+            foreach (var m in menus)
+            {
+                sb.AppendLine("---- meni ----");
+                foreach (var item in m.FindAllDescendants())
+                {
+                    string ime = "", tip = ""; bool aktivno = false;
+                    try { ime = item.Name; } catch { }
+                    try { tip = item.ControlType.ToString(); } catch { }
+                    try { aktivno = item.IsEnabled; } catch { }
+                    sb.AppendLine($"{tip} | {ime} | aktivno: {aktivno}");
+                }
+            }
+
+            string putanja = Path.Combine(AppContext.BaseDirectory, fileName);
+            File.WriteAllText(putanja, sb.ToString());
+            System.Diagnostics.Process.Start("notepad.exe", putanja);
+        }
+
+        public static void DumpWin32ToFile(IntPtr root, string fileName, bool otvoriNotepad = true)
+        {
+            var sb = new StringBuilder();
+            int i = 0;
+            EnumChildWindows(root, (h, _) =>
+            {
+                var cls = new StringBuilder(256);
+                GetClassName(h, cls, 256);
+                var txt = new StringBuilder(1024);
+                SendMessage(h, WM_GETTEXT, (IntPtr)1024, txt);
+                GetWindowRect(h, out var r);
+                sb.AppendLine($"[{i++}] {cls} | Tekst: {txt} | Poz: {r.Left},{r.Top}");
+                return true;
+            }, IntPtr.Zero);
+
+            string putanja = Path.Combine(AppContext.BaseDirectory, fileName);
+            File.WriteAllText(putanja, sb.ToString());
+            if (otvoriNotepad) System.Diagnostics.Process.Start("notepad.exe", putanja);
+
+        }
+
+
+        public static void DumpForegroundWindow(string fileName)
+        {
+            IntPtr h = GetForegroundWindow();
+            var naslov = new StringBuilder(256);
+            GetWindowText(h, naslov, 256);
+            Console.WriteLine($"[DEBUG] Aktivni prozor: '{naslov}'");
+            DumpWin32ToFile(h, fileName, otvoriNotepad: false);
+        }
+
+        public static void IzmeriPomerajDokumenti(Window logik, int staroX, int staroY)
+        {
+            IntPtr h = logik.Properties.NativeWindowHandle.Value;
+            GetWindowRect(h, out var wr);
+            var panel = NadjiDonjiLeviPanel(h);
+            if (panel == null) { Console.WriteLine("[TEST] Panel nije nađen."); return; }
+
+            int dx = (wr.Left + staroX) - panel.R.Left;
+            int dy = (wr.Top + staroY) - panel.R.Top;
+            Console.WriteLine($"[TEST] Prozor: {wr.Left},{wr.Top}  Panel: {panel.R.Left},{panel.R.Top} - {panel.R.Right},{panel.R.Bottom}");
+            Console.WriteLine($"[TEST] Pomeraj u odnosu na panel: X={dx}, Y={dy}");
+        }
+
+        private static string GetSafeInfo(AutomationElement el)
+        {
+            string tip = "Nepoznat";
+            try { tip = el.ControlType.ToString(); } catch { tip = "Grip/Poseban"; }
+
+            string name = "N/A";
+            try { name = el.Name; } catch { }
+
+            return $"Tip: {tip} | Ime {name}";
+        }
+
+        public static void DeepSearch(AutomationElement element, int level)
+        {
+            AutomationElement[] children;
+
+            try
+            {
+                children = element.FindAllChildren();
+            }
+            catch
+            {
+                return;
+            }
+
+            foreach (var child in children)
+            {
+                string distance = new string(' ', level * 2);
+                string info = GetSafeInfo(child);
+                Console.WriteLine($"{distance}{info}");
+
+                try
+                {
+                    child.DrawHighlight(System.Drawing.Color.Yellow);
+                }
+                catch { }
+
+                DeepSearch(child, level + 1);
+            }
+        }
+        #endregion
     }
+
+
 }
