@@ -1,18 +1,22 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace AutomationRezToInterV1
 {
+    // Kontrola rada preko tastera koje Logik ne koristi:
+    // PAUSE = pauza/nastavak (i "nastavi" na proveri), SCROLL LOCK = prekid
     public static class RunControl
     {
         private static readonly ManualResetEventSlim _gate = new(true);
         private static readonly CancellationTokenSource _cts = new();
-        private static volatile bool _typing;
+        private static volatile bool _cekaOdluku;
+
+        private const int VK_PAUSE = 0x13;
+        private const int VK_SCROLL = 0x91;
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
-
-        private const int VK_SPACE = 0x20;
-        private const int VK_F12 = 0x7B;
 
         private static bool IsDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
 
@@ -20,7 +24,6 @@ namespace AutomationRezToInterV1
         {
             var thread = new Thread(() =>
             {
-
                 bool pausePrev = false, stopPrev = false;
 
                 while (!_cts.IsCancellationRequested)
@@ -76,31 +79,30 @@ namespace AutomationRezToInterV1
 
         public static void TypeText(string text)
         {
-            _typing = true;
-            try { FlaUI.Core.Input.Keyboard.Type(text); }
-            finally
-            {
-                Thread.Sleep(60);
-                _typing = false;
-            }
+            FlaUI.Core.Input.Keyboard.Type(text);
+            Thread.Sleep(60);
         }
 
-        private const int VK_PAUSE = 0x13;
-        private const int VK_SCROLL = 0x91;
-        private static volatile bool _cekaOdluku;
-
-        public static bool WaitForDecision()   // Pause = nastavi; Scroll Lock = prekid (preko Checkpoint-a)
+        // Čeka odluku na proveri: PAUSE = nastavi, SCROLL LOCK = prekid
+        public static bool WaitForDecision()
         {
             _cekaOdluku = true;
             try
             {
-                while (IsDown(VK_PAUSE)) Thread.Sleep(30);   // ako je taster već držan, sačekaj
+                // ako je Pause pritisnut pre pitanja, program je pauziran, pa ga odpauziramo
+                if (!_gate.IsSet)
+                {
+                    _gate.Set();
+                    Console.WriteLine("[NASTAVAK] (Pause je pritisnut pre pitanja, pritisni ga ponovo za potvrdu)");
+                }
+
+                while (IsDown(VK_PAUSE)) Thread.Sleep(30);   // sačekaj da se taster pusti
                 while (true)
                 {
-                    Checkpoint();                            // Scroll Lock ovde prekida program
+                    _cts.Token.ThrowIfCancellationRequested();   // Scroll Lock prekida
                     if (IsDown(VK_PAUSE))
                     {
-                        while (IsDown(VK_PAUSE)) Thread.Sleep(30);   // sačekaj puštanje
+                        while (IsDown(VK_PAUSE)) Thread.Sleep(30);
                         return true;
                     }
                     Thread.Sleep(30);
@@ -108,8 +110,8 @@ namespace AutomationRezToInterV1
             }
             finally
             {
-                Thread.Sleep(100);      // da watcher vidi da je taster pušten
-                _cekaOdluku = false;    // tek onda Pause opet znači "pauza"
+                Thread.Sleep(100);
+                _cekaOdluku = false;
             }
         }
     }

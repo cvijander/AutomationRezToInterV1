@@ -185,10 +185,10 @@ namespace AutomationRezToInterV1
             return null;
         }
 
-        public static void PerformLogicLogin(Window loginWidow, UserInputConfig config)
+        public static void PerformLogicLogin(Window loginWindow, UserInputConfig config)
         {
-            var editFields = loginWidow.FindAllDescendants(cf => cf.ByControlType(ControlType.Edit));
-            var buttons = loginWidow.FindAllDescendants(cf => cf.ByControlType(ControlType.Button));
+            var editFields = loginWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Edit));
+            var buttons = loginWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Button));
 
             editFields[0].AsTextBox().Text = config.Password;
             editFields[1].AsTextBox().Text = config.Username;
@@ -535,6 +535,8 @@ namespace AutomationRezToInterV1
             Console.WriteLine($"  Partner:     {info?.Partner}");
             Console.WriteLine($"  Komentar:    {info?.Komentar}");
             Console.WriteLine($"  Plaćanje:    {config.Payment}");
+            if (config.TestRezim)
+                Console.WriteLine("  *** TEST REŽIM: BEZ KASE ***");
             Console.WriteLine("==========================================");
 
             if (!brojOk)
@@ -625,8 +627,9 @@ namespace AutomationRezToInterV1
                 return false;
 
             // PRIVREMENO: snimamo šta iskoči posle slanja
-
-            Console.WriteLine("[SUCCESS] Poslato na kasu.");
+            RunControl.Sleep(1000);
+            DumpForegroundWindow("kasa_prozor.txt");
+            Console.WriteLine("[INFO] Poslato na kasu. Ostatak za sada ručno.");            
             return true;
         }
 

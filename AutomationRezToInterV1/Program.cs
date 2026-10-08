@@ -40,62 +40,16 @@ namespace AutomationRezToInterV1
             }
         }
 
+        static void Zaustavi(string poruka, FlaUI.Core.AutomationBase automation, int processId)
+        {
+            Console.WriteLine($"[STOP] {poruka}");
+            AutomationHelpers.IspisiProzoreProcesa(automation, processId);
+            Console.ReadKey();
+        }
+
         static void Run(string[] args)
         {
-            /*
-                        // ===== TEST INTERNI PRENOS - obrisati posle =====
-            Console.WriteLine("[TEST] Imaš 8 sekundi da otvoriš meni dugmeta za razdvajanje (ako ga ima)...");
-            Thread.Sleep(8000);
-            using (var testAuto = new UIA2Automation())
-            {
-                var ip = AutomationHelpers.FindWindow(testAuto, "Interni prenos");
-                if (ip != null)
-                    AutomationHelpers.DumpWin32ToFile(ip.Properties.NativeWindowHandle.Value, "interni_win32.txt");
-                else
-                    Console.WriteLine("[TEST] Prozor Interni prenos nije nađen.");
-
-                AutomationHelpers.DumpOpenMenus(testAuto, "interni_meni.txt");
-            }
-            Console.ReadKey();
-            return;
-            // ===== KRAJ TESTA =====
-            */
-            /*
-            // ===== TEST DOKUMENTI - obrisati posle =====
-            var podesavanja = AutomationHelpers.UcitajKonfiguracijuPrograma();
-            AutomationHelpers.StartAnApplication(podesavanja.LogikPutanja);
-            using (var testAuto = new UIA2Automation())
-            {
-                Window w = null;
-                for (int i = 0; i < 75 && w == null; i++)   // do 15 s
-                {
-                    w = AutomationHelpers.FindLogicWindow(testAuto);
-                    if (w == null) Thread.Sleep(200);
-                }
-
-                if (w == null)
-                {
-                    Console.WriteLine("[TEST] Logik prozor nije nađen ni posle 15 s.");
-                    Console.WriteLine("[TEST] Otvoreni prozori:");
-                    foreach (var p in testAuto.GetDesktop().FindAllChildren())
-                        Console.WriteLine($"   '{p.Name}'");
-                }
-                else
-                {
-                    Console.WriteLine($"[TEST] Nađen prozor: '{w.Name}'");
-                    AutomationHelpers.MaximizeWindow(w);
-                    Thread.Sleep(1000);
-                    AutomationHelpers.IzmeriPomerajDokumenti(w, 78, 828);
-                    AutomationHelpers.DumpWin32ToFile(w.Properties.NativeWindowHandle.Value, "main_win32.txt");
-                    AutomationHelpers.DumpWindowToFile(w, "main_uia.txt");
-                    Console.WriteLine("[TEST] Dumpovi snimljeni.");
-                }
-            }
-            Console.ReadKey();
-            return;
-            // ===== KRAJ TESTA =====
-
-            */
+           
 
             FlaUI.Core.Input.Mouse.MovePixelsPerMillisecond = 20;   // brzo pomeranje miša umesto animacije
             Stopwatch ukupnaStoperica = Stopwatch.StartNew();
@@ -129,8 +83,6 @@ namespace AutomationRezToInterV1
             string pathToExeFile = osnovnaPodesavanja.LogikPutanja;
 
             // 3. Startujemo aplikaciju
-
-
 
 
             Application app = AutomationHelpers.StartAnApplication(pathToExeFile);
@@ -264,8 +216,7 @@ namespace AutomationRezToInterV1
 
                                 if (!success)
                                 {
-                                    Console.WriteLine("[STOP] Otknjižavanje nije uspelo. Proveri rezervaciju u Logiku ručno.");
-                                    Console.ReadKey();
+                                    Zaustavi("Otknjižavanje nije uspelo. Proveri rezervaciju u Logiku ručno.", automation, app.ProcessId);
                                     return;
                                 }
                                 Console.WriteLine("[INFO] Otknjiženo uspešno.");
@@ -302,82 +253,59 @@ namespace AutomationRezToInterV1
                                     noPressed = AutomationHelpers.ClickButtonOnDialog(automation, "Potvrda", "Ne");
                                 });
 
-                                if (noPressed)
+                                if (!noPressed)
                                 {
-                                    Console.WriteLine("[INFO] Odabir cena ");
+                                    Zaustavi("Nije se pojavio prozor Potvrda za cene. Rezervacija JE otknjižena, nastavi ručno od Kopiraj.", automation, app.ProcessId);
+                                    return;
                                 }
-                                else
-                                {
-                                    Console.WriteLine("[ERROR] nije se pojavio prozor potvrda cene ");
-                                }
+                                Console.WriteLine("[INFO] Odabir cena");
+
+                                // ===== ULAZNI MAGACIN (ostaje 1) =====
 
                                 bool warningHandled = false;
-                                AutomationHelpers.StopWatchSteps("Upozorenje za ulazni magacin", () =>
+                                AutomationHelpers.StopWatchSteps("Upozorenje: ulazni magacin", () =>
                                 {
-
-
                                     warningHandled = AutomationHelpers.TryClickDialog(automation, "Upozorenje", "U redu");
                                 });
+                                Console.WriteLine(warningHandled
+                                    ? "[SUCCESS] Upozorenje za ULAZNI magacin zatvoreno."
+                                    : "[INFO] Upozorenje za ULAZNI magacin se nije pojavilo.");
 
-                                if (warningHandled)
-                                {
-                                    Console.WriteLine("[SUCCESS] Prozor 'Upozorenje' zatvoren klikon na 'U redu'");
-                                }
-                                else
-                                {
-                                    Console.WriteLine("[ERROR] Prozor 'Upozorenje se nije pojavilo'");
-                                }
 
                                 // automatizaij za magacine 
-                                bool warehouseHandled = false;
-                                AutomationHelpers.StopWatchSteps("Prvi magacin", () =>
+                                bool ulazniOk = false;
+                                AutomationHelpers.StopWatchSteps("Ulazni magacin (1): U redu", () =>
                                 {
-                                    warehouseHandled = AutomationHelpers.ClickButtonOnDialog(automation, "Magacini", "U redu");
+                                    ulazniOk = AutomationHelpers.ClickButtonOnDialog(automation, "Magacini", "U redu", 15000);
                                 });
-
-
-
-                                if (!warehouseHandled)
+                                if (!ulazniOk)
                                 {
-                                    Console.WriteLine("[STOP] Prozor 'Magacini' (ulazni) nije obrađen. Interni prenos NIJE proknjižen. Proveri u Logiku ručno.");
-                                    Console.ReadKey();
+                                    Zaustavi("Prozor Magacini za ULAZNI magacin nije obrađen. Rezervacija JE otknjižena. U prozoru Magacini samo klikni 'U redu', pa nastavi ručno.", automation, app.ProcessId);
                                     return;
                                 }
-                                Console.WriteLine("[SUCCESS] Prozor 'Magacini' zatvoren klikom 'U redu'");
-                                // upozeorenje za izlazni magacin
+                                Console.WriteLine("[SUCCESS] ULAZNI magacin potvrđen (ostaje 1).");
 
-                                bool warningHandledExitWarehouse = false;
-                                AutomationHelpers.StopWatchSteps("Izlazni magacin ", () =>
+                                // ===== IZLAZNI MAGACIN (MP) =====
+                                bool warningIzlazni = false;
+                                AutomationHelpers.StopWatchSteps("Upozorenje: izlazni magacin", () =>
                                 {
-                                    warningHandledExitWarehouse = AutomationHelpers.TryClickDialog(automation, "Upozorenje", "U redu");
+                                    warningIzlazni = AutomationHelpers.TryClickDialog(automation, "Upozorenje", "U redu");
                                 });
+                                Console.WriteLine(warningIzlazni
+                                    ? "[SUCCESS] Upozorenje za IZLAZNI magacin zatvoreno."
+                                    : "[INFO] Upozorenje za IZLAZNI magacin se nije pojavilo.");
 
-
-                                if (warningHandledExitWarehouse)
+                                bool izlazniOk = false;
+                                AutomationHelpers.StopWatchSteps("Izlazni magacin (MP)", () =>
                                 {
-                                    Console.WriteLine("[SUCCESS] Prozor 'Upozorenje' zatvoren klikon na 'U redu'");
-                                }
-                                else
-                                {
-                                    Console.WriteLine("[ERROR] Prozor 'Upozorenje se nije pojavilo'");
-                                }
-
-                                // AutomationHelpers.DeepSearch(automation.GetDesktop(), 0);
-                                bool warehouseExitSelected = false;
-                                AutomationHelpers.StopWatchSteps("mp magacin", () =>
-                                {
-                                    warehouseExitSelected = AutomationHelpers.IzaberiMagacinWin32(automation, "MP");
+                                    izlazniOk = AutomationHelpers.IzaberiMagacinWin32(automation, "MP");
                                 });
-
-
-
-                                if (!warehouseExitSelected)
+                                if (!izlazniOk)
                                 {
-                                    Console.WriteLine("[STOP] MP magacin nije izabran. Interni prenos NIJE proknjižen. Proveri magacine ručno.");
-                                    Console.ReadKey();
+                                    Zaustavi("IZLAZNI magacin MP nije izabran. Rezervacija JE otknjižena. U prozoru Magacini upiši MP, Pretraga, pa 'U redu', i nastavi ručno.", automation, app.ProcessId);
                                     return;
                                 }
-                                Console.WriteLine("[SUCCESS] Magacin MP je selektovan");
+                                Console.WriteLine("[SUCCESS] IZLAZNI magacin MP izabran.");
 
                                 string prviProzor = null;
                                 AutomationHelpers.StopWatchSteps("Upozorenje o količini / Obaveštenje", () =>
@@ -403,7 +331,7 @@ namespace AutomationRezToInterV1
                                     return;
                                 }
                                 Console.WriteLine("[SUCCESS] Interni prenos kreiran.");
-
+                                                                 
 
                                 //AutomationHelpers.EnterReservationComment(automation, config);
                                 bool ipOtvoren = false;
@@ -465,11 +393,7 @@ namespace AutomationRezToInterV1
                                     Console.ReadKey();
                                     return;
                                 }
-                                /*
-                                // PRIVREMENO: snimamo mali prozor koji iskoči, da vidimo njegova dugmad
-                                RunControl.Sleep(800);
-                                AutomationHelpers.DumpForegroundWindow("mali_prozor.txt");
-                                */
+                              
 
                                 bool razdvojenoOk = false;
                                 AutomationHelpers.StopWatchSteps("Razdvoji rezervaciju", () =>
@@ -621,7 +545,9 @@ namespace AutomationRezToInterV1
                                 // Ovde će ići slanje u Logik Kasu, kad bude smelo da se testira.
 
                                 // ===== SLANJE NA KASU =====
-                                bool slanjeNaKasu = true;   // prebaci na true kad kolega odobri
+                                bool slanjeNaKasu = !config.TestRezim;  
+                                if (!slanjeNaKasu)
+                                    Console.WriteLine("[TEST] Test režim: slanje na kasu preskočeno.");   
 
                                 if (slanjeNaKasu && !AutomationHelpers.PosaljiNaKasu(automation))
                                 {
@@ -678,7 +604,7 @@ namespace AutomationRezToInterV1
             Console.WriteLine("[KRAJ] Proces automatizacije je zavrsen");
 
             // Na kraju uspešnog procesa:
-            if (zavrseno)
+            if (zavrseno && !config.TestRezim)
             {
                 string izabraniNacin = (config.Payment == PaymentOption.Cek) ? "Cek" : "Gotovina";
                 AplikacijaStatistika.SacuvajStatistiku(izabraniNacin);
@@ -686,6 +612,10 @@ namespace AutomationRezToInterV1
                 Console.WriteLine("==========================================");
                 Console.WriteLine($" UKUPAN SKOR: Ček: {noviCek} | Gotovina: {novaGotovina}");
                 Console.WriteLine("==========================================");
+            }
+            else if (zavrseno)
+            {
+                Console.WriteLine("[TEST] Test prolaz uspešan, statistika nije menjana.");
             }
             else
             {

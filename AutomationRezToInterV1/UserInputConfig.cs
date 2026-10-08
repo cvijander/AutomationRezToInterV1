@@ -16,6 +16,8 @@
 
         public string RezervationNumber { get; set; }
 
+        public bool TestRezim { get; set; }
+
 
         public static UserInputConfig Initialize()
         {
@@ -113,7 +115,7 @@
                 {
                     Console.WriteLine();
 
-                    Console.Write("Unesi broj rezervacije (npr 28993) / (29573) : ");
+                    Console.Write("Unesi broj rezervacije (npr 12345): ");
                     inputNumber = Console.ReadLine().Trim();
 
                     if (string.IsNullOrWhiteSpace(inputNumber))
@@ -161,14 +163,21 @@
                 Console.WriteLine("-----------------");
                 Console.WriteLine($"Zabelezeno Broj rezervacije: {config.RezervationNumber} i kucamo nacin placanja : {config.Payment}");
                 Console.WriteLine();
-                Console.WriteLine($"Da li su podaci tacni (Da) - nastavi  |  (Ne) -  ponovi  |  (ESC) - prekid programa ");
+                Console.WriteLine("Da li su podaci tacni?  (D) Da, nastavi  |  (T) TEST, bez kase  |  (N) ponovi  |  (ESC) izlaz");                
                 Console.Write("Odgovor : ");
                 Console.WriteLine();
                 var key = Console.ReadKey(true).Key;
 
                 if (key == ConsoleKey.D)
                 {
+                    config.TestRezim = false;
                     confirmed = true;
+                }
+                else if (key == ConsoleKey.T)
+                {
+                    config.TestRezim = true;
+                    confirmed = true;
+                    Console.WriteLine(">>> TEST REŽIM: rezervacija se NEĆE slati na kasu, statistika se ne menja <<<");
                 }
                 else if (key == ConsoleKey.Escape)
                 {
