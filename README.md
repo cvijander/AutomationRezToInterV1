@@ -1,57 +1,99 @@
 # AutomationRezToInterV1
 
-Desktop alat u C# / .NET za automatizaciju svakodnevnog poslovnog procesa u Logik ERP sistemu — otknjižavanje rezervacije, kreiranje i knjiženje internog prenosa i slanje rezervacije na kasu radi fiskalnog računa.
+Desktop alat u C# koji automatizuje svakodnevni proces u Logik ERP sistemu: maloprodajnu rezervaciju pretvara u interni prenos iz magacina u maloprodaju (MP), proknjižava ga i šalje rezervaciju na kasu radi izdavanja fiskalnog računa.
+
+Alat se svakodnevno koristi u radu, na stvarnim porudžbinama.
+
+<!-- Ovde ide GIF ili screenshot konzole iz test režima -->
 
 ## Problem
 
-Ručno izvršavanje ovog procesa ima 15–20 koraka i traje 40–50 sekundi po transakciji: otknjiži se rezervacija, bira se ulazni i izlazni magacin, unosi se komentar, interni prenos se razdvaja od rezervacije, proknjižava se, a rezervacija se šalje na kasu za fiskalni račun. Rutina se ponavlja desetine puta dnevno, pa svaka sekunda i svaki propušteni klik direktno utiču na tempo rada.
+Ručno, ovaj proces ima 15 do 20 koraka po rezervaciji: otknjiži se rezervacija, kopira u interni prenos, biraju se ulazni i izlazni magacin, upisuje komentar, interni prenos se razdvaja od rezervacije, proknjižava, a rezervacija se šalje na kasu. Rutina se ponavlja desetine puta dnevno, i svaki propušteni klik znači grešku koju posle treba ručno ispravljati.
 
-## Rešenje
+## Kako je rešenje evoluiralo
 
-Prethodna verzija ovog alata je bila klasičan "mouse clicker" — simulacija pokreta i klikova miša na fiksnim koordinatama ekrana. Radila je, ali sporo (~70s po transakciji) i lomila se na svaku promenu rezolucije ili pozicije prozora.
+**Verzija 0, "mouse clicker".** Klikovi na fiksnim koordinatama ekrana. Radila je, ali sporo (oko 70 s) i lomila se na svaku promenu rezolucije ili položaja prozora.
 
-`AutomationRezToInterV1` koristi **FlaUI** (Windows UI Automation) da pronalazi i upravlja UI elementima Logik aplikacije po imenu i tipu elementa, a ne po koordinatama na ekranu. Rezultat: ~40 sekundi po transakciji, oko 40% brže, i znatno stabilnije na promene ekrana.
+**Verzija 1, FlaUI.** Elementi se traže po imenu i tipu (Windows UI Automation), umesto po koordinatama. Oko 40 s po transakciji i uspešnost 90 do 95%. Ostali su delovi rađeni "naslepo" (npr. 4 puta Tab do dugmeta), i baš su oni izazivali greške.
+
+**Verzija 2 (trenutna).** Cilj više nije bio samo brzina, nego da program **nikad ne uradi pogrešnu stvar**. Svaki rizičan korak ima proveru pre i posle sebe, a sve što je ranije rađeno naslepo sada se radi po nazivu dugmeta ili polja.
 
 ## Šta radi, korak po korak
 
-1. Pokreće Logik aplikaciju i prijavljuje se
-2. Pronalazi rezervaciju po unetom broju
-3. Otknjižava rezervaciju
-4. Kreira interni prenos iz rezervacije
-5. Bira ulazni i izlazni magacin
-6. Unosi komentar o rezervaciji
-7. Razdvaja interni prenos od rezervacije
-8. Proknjižava interni prenos
-9. Šalje originalnu rezervaciju na kasu radi izdavanja fiskalnog računa
-10. Beleži statistiku obrađenih transakcija (ček / gotovina)
+1. Pokreće Logik i radi isključivo sa prozorima **tog** procesa
+2. Otvara modul Dokumenti (prečica Ctrl+F5) i prijavljuje se
+3. Postavlja tip dokumenta na "Rezervacija", čita polje i klikće dok ne piše tačan tip
+4. Unosi broj rezervacije i otvara je
+5. **Provera:** čita broj, partnera i komentar otvorene rezervacije i prikazuje ih. Nastavlja tek kad korisnik potvrdi tasterom Pause
+6. Otknjižava rezervaciju i kopira je u interni prenos
+7. Potvrđuje ulazni magacin (1) i bira izlazni magacin (MP)
+8. **Provera:** čita oba magacina iz internog prenosa (`/1` i `MP`)
+9. Upisuje komentar (način plaćanja i broj rezervacije), pa ga **čita nazad** radi provere
+10. Razdvaja interni prenos od rezervacije, uz **proveru** da je povezana baš ta rezervacija
+11. Ponovo otvara interni prenos, **proverava komentar** i proknjižava ga
+12. Ponovo otvara rezervaciju, šalje je u Logik Kasu i zatvara je
 
-Svaki korak se posebno meri (stopwatch) i ispisuje u konzolu — korisno za debagovanje i praćenje gde tačno vreme odlazi.
+Ako bilo koja provera ne prođe, program staje sa porukom `[STOP]` koja kaže **u kom je stanju Logik i odakle se nastavlja ručno**, i ispisuje naslov i tekst svakog otvorenog prozora Logika.
+
+## Tehnički izazovi i kako su rešeni
+
+**FlaUI ne vidi sve kontrole u Delphi aplikaciji.** Logik je pisan u Delphiju, i mnoga polja i dugmad nisu vidljiva kroz UI Automation. Rešenje je čitanje direktno preko Win32 API-ja: `EnumChildWindows` prođe kroz sve kontrole prozora, `WM_GETTEXT` čita njihov tekst, a klik se šalje porukom `BM_CLICK`, nezavisno od pozicije miša. Za istraživanje nepoznatih prozora napravljeni su alati koji snime sve kontrole prozora (klasu, tekst i poziciju) u fajl.
+
+**Skriveni moduli na istom mestu.** Logik drži svih 9 modula učitanih i naslaganih jedan preko drugog, pa npr. dugme "Pronađi" postoji 8 puta. Program zato traži kontrole samo unutar modula Dokumenti, a pre klika proverava (`WindowFromPoint`) da je na tom mestu ekrana zaista prava kontrola.
+
+**Taster koji je otvarao SEF.** Za potvrdu je prvo korišćen F9, a pokazalo se da je F9 u Logiku prečica za modul SEF, pa je pritisak "procurio" u aplikaciju. Kontrola je prebačena na tastere koje Logik ne koristi: **Pause** (nastavi, pauza) i **Scroll Lock** (prekid).
+
+**Tip dokumenta.** Polje Tip se menja dvoklikom kroz niz Račun, Kalkulacija, Predračun, Rezervacija, a početno stanje nije uvek isto. Stari kod je radio fiksna 4 dvoklika i ponekad stao na Predračunu. Novi čita polje posle svakog klika.
+
+**Pogrešan prozor.** Program je u jednom trenutku "našao" prozor Rezervacija u naslovu sopstvene konzole (zbog imena foldera), a ranije i stari, već otvoren Logik. Oba slučaja je rešilo traženje prozora isključivo unutar procesa koji je program sam pokrenuo.
+
+**Brzina miša.** FlaUI podrazumevano animira pomeranje miša, što je dodavalo i preko sekunde po koraku. Animacija je ubrzana, a gde je moguće, klik ide porukom, bez miša.
+
+## Bezbednost u radu
+
+- **Provera pre otknjižavanja:** korisnik vidi broj, partnera i komentar, i potvrđuje tasterom Pause (Scroll Lock prekida)
+- **Test režim (T):** ceo proces se izvršava, ali bez slanja na kasu i bez upisa u statistiku
+- **Pauza i prekid u svakom trenutku:** Pause / Scroll Lock
+- **Log svakog pokretanja:** fajl u folderu `logovi`, sa vremenom za svaku liniju, uključujući i neočekivane greške
+- **Statistika:** broj obrađenih rezervacija po načinu plaćanja (ček/gotovina), samo za uspešno završene
+
+## Rezultati
+
+U prva tri dana rada nove verzije, na stvarnim porudžbinama:
+
+- **35 rezervacija obrađeno od početka do kraja**, bez ručne intervencije
+- **3 bezbedna zaustavljanja**: jedna veleprodajna rezervacija koju Logik ne dozvoljava da se otknjiži, i dva slučaja koja su ispravljena istog dana
+- **0 pogrešno proknjiženih dokumenata**
+
+Automatski deo procesa, uključujući slanje na kasu, traje oko 40 do 45 sekundi. Ukupno vreme sa unosom broja i potvrdom je oko 50 sekundi.
 
 ## Tehnologije
 
-- C# / .NET 10
-- FlaUI.Core + FlaUI.UIA2 — UI Automation, ne simulacija miša
-- System.Text.Json — čuvanje konfiguracije i statistike
+- C# / .NET Framework 4.8
+- FlaUI.Core + FlaUI.UIA2 (Windows UI Automation)
+- Win32 API preko P/Invoke (`EnumChildWindows`, `SendMessage`/`WM_GETTEXT`, `PostMessage`/`BM_CLICK`, `WindowFromPoint`, `GetAsyncKeyState`)
+- System.Text.Json (konfiguracija)
 
-## Tehnički detalji i ograničenja
+## Struktura projekta
 
-Cilj je bio potpuno izbeći mouse-clicker pristup, ali Logik je pisan u Delphiju, a FlaUI ne vidi sva polja i dugmad u toj aplikaciji. Zbog toga je na par mesta u procesu (npr. prvi klik za otvaranje dokumenta) i dalje zadržan klik po koordinatama kao fallback, dok se za sve gde FlaUI može da pronađe element po imenu/tipu koristi to — na nekim mestima navigacija tastaturom (npr. 4x Tab do dugmeta), na drugima direktno pronalaženje ciljanog UI elementa.
-
-Druga bitna razlika u odnosu na stari mouse-clicker: umesto fiksnih pauza, alat aktivno čeka da se prozor pojavi na desktopu (pretragom aktivnih prozora), pa nastavlja čim ga pronađe — brže kad je sistem responzivan, a otpornije kad Logik zakasni zbog svojih internih procesa.
-
-**Uspešnost:** oko 90–95%. Poznato mesto greške je sekvenca od 4 pritiska na Tab do dugmeta "razdvoj rezervaciju" — u oko 5% slučajeva fokus stigne posle 3 Taba umesto 4, pa dugme ne bude fokusirano kad se očekuje klik.
+| Fajl | Uloga |
+|---|---|
+| `Program.cs` | Tok procesa, korak po korak, sa proverama i `[STOP]` porukama |
+| `AutomationHelpers.cs` | Koraci u Logiku, Win32 čitanje polja i klikovi, debug alati za snimanje prozora |
+| `RunControl.cs` | Pauza, nastavak i prekid preko tastera Pause i Scroll Lock |
+| `UserInputConfig.cs` | Unos broja rezervacije, načina plaćanja i izbor test režima |
+| `DvostrukiIzlaz.cs` | Ispis istovremeno u konzolu i u log fajl |
 
 ## Pokretanje
 
-Zahteva .NET 10 i Windows (aplikacija komunicira sa desktop UI-jem, pa ne radi na drugim OS-ovima).
+Potrebni su Windows, .NET Framework 4.8 i instaliran Logik.
 
-Pri prvom pokretanju program sam kreira `appsettings.json` sa podrazumevanim vrednostima (putanja do Logik `.exe` fajla, korisničko ime i lozinka) — te vrednosti treba izmeniti da odgovaraju konkretnoj instalaciji. Nakon toga, program traži prijavu (brzi F1 nalog ili ručni unos), pa broj rezervacije i način plaćanja, i sam izvršava ostatak procesa.
+1. Build u **Release** režimu, pa ceo folder `bin\Release\net48\` prebaciti gde se program koristi.
+2. Pri prvom pokretanju program pravi `appsettings.json` sa primer vrednostima. Upisati putanju do Logik `.exe` fajla, korisničko ime i lozinku.
+3. Pokrenuti, uneti broj rezervacije i način plaćanja, pa izabrati **D** (pravi rad) ili **T** (test, bez kase).
 
-## Rezultat
-
-- Vreme izvršavanja: ~70s (stari mouse-clicker pristup) → ~40s
-- Svakodnevno u upotrebi za obradu maloprodajnih rezervacija
+`appsettings.json`, logovi i statistika nisu deo repozitorijuma.
 
 ## Napomena
 
-Alat je pisan za internu upotrebu i zavisi od izgleda konkretne Logik aplikacije koja se koristi u firmi, tako da nije direktno prenosiv na druge sisteme bez prilagođavanja selektora UI elemenata.
+Alat je pisan za internu upotrebu i zavisi od izgleda konkretne Logik instalacije. Na drugom sistemu bi trebalo prilagoditi nazive prozora, dugmadi i polja.
