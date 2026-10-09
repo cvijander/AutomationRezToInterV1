@@ -11,6 +11,8 @@ namespace AutomationRezToInterV1
     {
         static void Main(string[] args)
         {
+            Console.Title = "Automatizacija MP";  // novi nazi foldera 
+
             string folder = Path.Combine(AppContext.BaseDirectory, "logovi");
             Directory.CreateDirectory(folder);
             string logPutanja = Path.Combine(folder, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt");
@@ -93,6 +95,8 @@ namespace AutomationRezToInterV1
                 Console.ReadKey();
                 return;
             }
+
+            AutomationHelpers.LogikProcessId = app.ProcessId; // samo logic procese
 
             using (UIA2Automation automation = new UIA2Automation())
             {

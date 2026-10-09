@@ -18,9 +18,10 @@ namespace AutomationRezToInterV1
 {
     public class AutomationHelpers
     {
-
+        public static int LogikProcessId { get; set; }
         public static Application StartAnApplication(string path)
         {
+
             var app = Application.Launch(path);
             Console.WriteLine("[INFO] Logik pokrenut, čekam glavni prozor...");
             return app;
@@ -173,14 +174,15 @@ namespace AutomationRezToInterV1
 
         public static Window FindWindow(FlaUI.Core.AutomationBase automation, string namePart)
         {
-            var widows = automation.GetDesktop().FindAllChildren(cf => cf.ByControlType(ControlType.Window));
-
-            foreach (var w in widows)
+            foreach (var w in automation.GetDesktop().FindAllChildren(cf => cf.ByControlType(ControlType.Window)))
             {
-                if (w.Name.Contains(namePart))
+                try
                 {
-                    return w.AsWindow();
+                    // samo prozori Logika (ne konzola, ne drugi programi)
+                    if (LogikProcessId != 0 && w.Properties.ProcessId.ValueOrDefault != LogikProcessId) continue;
+                    if ((w.Name ?? "").Contains(namePart)) return w.AsWindow();
                 }
+                catch (Exception ex) when (ex is not OperationCanceledException) { }
             }
             return null;
         }
@@ -524,7 +526,15 @@ namespace AutomationRezToInterV1
                 return false;
             }
 
-            var info = ProcitajRezervaciju(rezProzor.Properties.NativeWindowHandle.Value);
+            // polja se popunjavaju sa malim zakašnjenjem, pa čitamo više puta (do 3 s)
+            RezInfo info = null;
+            var swCitanje = Stopwatch.StartNew();
+            while (swCitanje.ElapsedMilliseconds < 3000)
+            {
+                info = ProcitajRezervaciju(rezProzor.Properties.NativeWindowHandle.Value);
+                if (info != null && !string.IsNullOrEmpty(info.Broj)) break;
+                RunControl.Sleep(150);
+            }
             string ocekivano = $"{config.RezervationNumber}/{DateTime.Now:yy}/";
             bool brojOk = info != null && info.Broj.StartsWith(ocekivano);
 
@@ -1108,7 +1118,7 @@ namespace AutomationRezToInterV1
 
         public static class AplikacijaStatistika
         {
-            private static readonly string statFile = "statistika.txt";
+            private static readonly string statFile = Path.Combine(AppContext.BaseDirectory, "statistika.txt");
 
             public static (int cek, int gotovina) UcitajStatistiku()
             {
@@ -1156,7 +1166,7 @@ namespace AutomationRezToInterV1
 
         public static AppConfig UcitajKonfiguracijuPrograma()
         {
-            string putanjaFajla = "appsettings.json";
+            string putanjaFajla = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
             // Ako fajl ne postoji, mi ga kreiramo sa probnim podacima
             if (!File.Exists(putanjaFajla))
