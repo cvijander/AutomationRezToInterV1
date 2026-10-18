@@ -59,13 +59,13 @@ Ako bilo koja provera ne prođe, program staje sa porukom `[STOP]` koja kaže **
 
 ## Rezultati
 
-U prva tri dana rada nove verzije, na stvarnim porudžbinama:
+Od 6. do 16. oktobra 2026, na stvarnim porudžbinama:
 
-- **35 rezervacija obrađeno od početka do kraja**, bez ručne intervencije
-- **3 bezbedna zaustavljanja**: jedna veleprodajna rezervacija koju Logik ne dozvoljava da se otknjiži, i dva slučaja koja su ispravljena istog dana
-- **0 pogrešno proknjiženih dokumenata**
+- **99 rezervacija obrađeno od početka do kraja**, uključujući slanje na kasu, bez ručne intervencije
+- **0 pogrešno proknjiženih dokumenata**: svako zaustavljanje desilo se pre bilo kakve izmene u Logiku
+- Od uvođenja poslednjih ispravki: **61 rezervacija zaredom bez ijednog zaustavljanja**. Jedini prekid u tom periodu bio je nestanak interneta, kada program bezbedno staje pre prijave.
 
-Automatski deo procesa, uključujući slanje na kasu, traje oko 40 do 45 sekundi. Ukupno vreme sa unosom broja i potvrdom je oko 50 sekundi.
+Automatski deo procesa, uključujući slanje na kasu, traje u proseku **oko 37 sekundi**.
 
 ## Tehnologije
 
